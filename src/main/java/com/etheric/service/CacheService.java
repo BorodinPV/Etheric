@@ -1,6 +1,7 @@
 package com.etheric.service;
 
 import com.etheric.model.*;
+import com.etheric.util.SecretMasker;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;
 
@@ -100,7 +101,7 @@ public class CacheService {
     private <T> void put(String key, T value, long ttlSeconds) {
         Instant expiresAt = Instant.now().plusSeconds(ttlSeconds);
         cache.put(key, new CacheEntry<>(value, expiresAt));
-        LOG.debugf("Cached key: %s, expires at: %s", key, expiresAt);
+        LOG.debugf("Cached key: %s, expires at: %s", SecretMasker.maskCacheKey(key), expiresAt);
     }
 
     @SuppressWarnings("unchecked")
@@ -111,7 +112,7 @@ public class CacheService {
         }
         if (Instant.now().isAfter(entry.expiresAt)) {
             cache.remove(key);
-            LOG.debugf("Cache entry expired: %s", key);
+            LOG.debugf("Cache entry expired: %s", SecretMasker.maskCacheKey(key));
             return null;
         }
         return (T) entry.value;
@@ -119,7 +120,7 @@ public class CacheService {
 
     private void delete(String key) {
         cache.remove(key);
-        LOG.debugf("Deleted cache key: %s", key);
+        LOG.debugf("Deleted cache key: %s", SecretMasker.maskCacheKey(key));
     }
 
     public boolean exists(String key) {

@@ -76,7 +76,9 @@ class LogoutEndpointTest {
                 containsString("SESSIONID="),
                 containsString("Max-Age=0"),
                 containsString("Path=/"),
-                containsString("HttpOnly")
+                containsString("HttpOnly"),
+                containsString("Secure"),
+                containsString("SameSite=Lax")
             ));
     }
 }

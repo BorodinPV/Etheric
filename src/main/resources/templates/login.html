@@ -30,6 +30,7 @@
             {#if state}
                 <input type="hidden" name="state" value="{state}">
             {/if}
+            <input type="hidden" name="csrf_token" value="{csrfToken}">
             <div class="form-group">
                 <label for="username">Имя пользователя</label>
                 <input type="text" id="username" name="username" required autofocus>

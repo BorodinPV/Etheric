@@ -1,7 +1,6 @@
 package com.etheric.endpoint;
 
 import com.etheric.model.AuthorizationCodeData;
-import com.etheric.model.AuthorizationRequestState;
 import com.etheric.repository.ClientRepository;
 import com.etheric.service.CacheService;
 import com.etheric.service.JwtService;
@@ -9,7 +8,10 @@ import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.*;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
 import java.net.URI;
