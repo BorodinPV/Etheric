@@ -5,6 +5,8 @@ import com.etheric.exception.OAuthException;
 import com.etheric.model.AuthorizationRequestState;
 import com.etheric.repository.ClientRepository;
 import com.etheric.service.CacheService;
+import com.etheric.util.PkceUtil;
+import com.etheric.util.SessionCookieFactory;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -12,7 +14,6 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.UriBuilder;
 import org.jboss.logging.Logger;
 
 import java.net.URI;
@@ -37,6 +38,9 @@ public class AuthorizationEndpoint {
             @QueryParam("redirect_uri") String redirectUri,
             @QueryParam("state") String state,
             @QueryParam("scope") List<String> scope,
+            @QueryParam("code_challenge") String codeChallenge,
+            @QueryParam("code_challenge_method") String codeChallengeMethod,
+            @QueryParam("nonce") String nonce,
             @Context HttpHeaders headers) {
 
         LOG.debugf("Authorization request: responseType=%s, clientId=%s, state=%s", responseType, clientId, state);
@@ -62,19 +66,34 @@ public class AuthorizationEndpoint {
             throw new OAuthException(OAuthError.INVALID_SCOPE, redirectUri, state);
         }
 
+        String resolvedMethod = null;
+        if (codeChallenge != null && !codeChallenge.isBlank()) {
+            resolvedMethod = (codeChallengeMethod == null || codeChallengeMethod.isBlank())
+                    ? PkceUtil.METHOD_S256
+                    : codeChallengeMethod;
+            if (!PkceUtil.isSupportedMethod(resolvedMethod)) {
+                throw new OAuthException(OAuthError.INVALID_REQUEST, redirectUri, state);
+            }
+        } else if (codeChallengeMethod != null && !codeChallengeMethod.isBlank()) {
+            throw new OAuthException(OAuthError.INVALID_REQUEST, redirectUri, state);
+        }
+
         AuthorizationRequestState requestState = new AuthorizationRequestState(
                 clientId,
                 redirectUri,
                 scope,
                 state,
-                null
+                null,
+                codeChallenge,
+                resolvedMethod,
+                nonce
         );
         cacheService.saveAuthorizationRequestState(state, requestState, REQUEST_STATE_TTL);
 
         String sessionId = extractSessionId(headers);
         if (sessionId != null) {
             var session = cacheService.getSession(sessionId);
-            if (session != null) {
+            if (session != null && session.getUserId() != null) {
                 requestState.setUserId(session.getUserId());
                 cacheService.saveAuthorizationRequestState(state, requestState, REQUEST_STATE_TTL);
             }
@@ -89,8 +108,8 @@ public class AuthorizationEndpoint {
 
     private String extractSessionId(HttpHeaders headers) {
         String cookie = headers.getHeaderString("Cookie");
-        if (cookie != null && cookie.contains("SESSIONID=")) {
-            String[] parts = cookie.split("SESSIONID=");
+        if (cookie != null && cookie.contains(SessionCookieFactory.COOKIE_NAME + "=")) {
+            String[] parts = cookie.split(SessionCookieFactory.COOKIE_NAME + "=");
             if (parts.length > 1) {
                 String value = parts[1].split(";")[0].trim();
                 if (!value.isEmpty()) {

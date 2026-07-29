@@ -3,30 +3,36 @@ package com.etheric.model;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class TokenResponse {
+public class IntrospectionResponse {
 
-    @JsonProperty("access_token")
-    private String accessToken;
+    private boolean active;
+
+    private String scope;
+
+    @JsonProperty("client_id")
+    private String clientId;
+
+    private String username;
 
     @JsonProperty("token_type")
     private String tokenType;
 
-    @JsonProperty("expires_in")
-    private Long expiresIn;
+    private Long exp;
 
-    @JsonProperty("refresh_token")
-    private String refreshToken;
+    private Long iat;
 
-    @JsonProperty("scope")
-    private String scope;
+    private String sub;
 
-    @JsonProperty("id_token")
-    private String idToken;
+    private String aud;
+
+    private String iss;
 }

@@ -5,9 +5,11 @@ import com.etheric.model.JwksResponse;
 import io.smallrye.jwt.algorithm.SignatureAlgorithm;
 import io.smallrye.jwt.auth.principal.JWTParser;
 import io.smallrye.jwt.build.Jwt;
+import io.smallrye.jwt.build.JwtClaimsBuilder;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.jwt.Claims;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.logging.Logger;
@@ -26,6 +28,9 @@ public class JwtService {
 
     @Inject
     JWTParser jwtParser;
+
+    @ConfigProperty(name = "etheric.jwt.issuer", defaultValue = "http://localhost:8080")
+    String issuer;
 
     private RSAPublicKey publicKey;
     private RSAPrivateKey privateKey;
@@ -50,7 +55,8 @@ public class JwtService {
         long now = System.currentTimeMillis() / 1000;
         long expiry = 3600;
 
-        return Jwt.claim(Claims.sub, userId)
+        return Jwt.issuer(issuer)
+                .claim(Claims.sub, userId)
                 .claim(Claims.groups, roles)
                 .claim("scopes", scopes)
                 .issuedAt(now)
@@ -64,13 +70,45 @@ public class JwtService {
         long now = System.currentTimeMillis() / 1000;
         long expiry = 604800;
 
-        return Jwt.claim(Claims.sub, userId)
+        return Jwt.issuer(issuer)
+                .claim(Claims.sub, userId)
                 .claim(Claims.groups, roles)
                 .claim("scopes", scopes)
                 .claim("token_type", "refresh")
                 .issuedAt(now)
                 .expiresAt(now + expiry)
                 .jws().algorithm(SignatureAlgorithm.RS256)
+                .keyId(keyId)
+                .sign(privateKey);
+    }
+
+    public String generateIdToken(String userId, String clientId, String nonce,
+                                  List<String> scopes, String email, String username) {
+        long now = System.currentTimeMillis() / 1000;
+        long expiry = 3600;
+
+        JwtClaimsBuilder builder = Jwt.issuer(issuer)
+                .subject(userId)
+                .audience(clientId)
+                .issuedAt(now)
+                .expiresAt(now + expiry)
+                .claim("auth_time", now);
+
+        if (nonce != null && !nonce.isBlank()) {
+            builder.claim("nonce", nonce);
+        }
+        if (scopes != null) {
+            if (scopes.contains("email") && email != null) {
+                builder.claim("email", email);
+                builder.claim("email_verified", true);
+            }
+            if (scopes.contains("profile") && username != null) {
+                builder.claim("preferred_username", username);
+                builder.claim("name", username);
+            }
+        }
+
+        return builder.jws().algorithm(SignatureAlgorithm.RS256)
                 .keyId(keyId)
                 .sign(privateKey);
     }
@@ -124,5 +162,9 @@ public class JwtService {
 
     public String getKeyId() {
         return keyId;
+    }
+
+    public String getIssuer() {
+        return issuer;
     }
 }

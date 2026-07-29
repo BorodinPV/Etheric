@@ -22,4 +22,12 @@ public class AuthorizationCodeData {
     private String redirectUri;
 
     private List<String> scopes;
+
+    @JsonProperty("code_challenge")
+    private String codeChallenge;
+
+    @JsonProperty("code_challenge_method")
+    private String codeChallengeMethod;
+
+    private String nonce;
 }
