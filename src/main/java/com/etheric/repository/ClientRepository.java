@@ -61,6 +61,15 @@ public class ClientRepository {
         return getGrantTypes(clientId).contains(grantType);
     }
 
+    public Client save(Client client) {
+        clientsByClientId.put(client.getClientId(), client);
+        return client;
+    }
+
+    public List<Client> findAll() {
+        return List.copyOf(clientsByClientId.values());
+    }
+
     private void initTestData() {
         Client testClient = new Client(
                 UUID.randomUUID(),
