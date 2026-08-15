@@ -18,8 +18,6 @@ public class ValidProdStartupProfile implements QuarkusTestProfile {
         return Map.ofEntries(
                 entry("etheric.admin.api-key", "prod-test-secret-key"),
                 entry("quarkus.http.cors", "false"),
-                entry("quarkus.oidc.enabled", "false"),
-                entry("quarkus.oidc.devservices.enabled", "false"),
                 entry("quarkus.datasource.devservices.enabled", "false"),
                 entry("quarkus.redis.devservices.enabled", "false"),
                 entry("quarkus.datasource.username", "etheric"),

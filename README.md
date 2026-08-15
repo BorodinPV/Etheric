@@ -2,6 +2,8 @@
 
 Высокопроизводительный **OAuth 2.0 Authorization Server** на Quarkus (Authorization Code Grant по [RFC 6749](https://www.rfc-editor.org/info/rfc6749)).
 
+> **Интеграция клиентских приложений:** [docs/IntegrationGuide.md](docs/IntegrationGuide.md)
+
 ## Быстрый старт
 
 ### 1. Инфраструктура (PostgreSQL + Redis)
@@ -59,6 +61,11 @@ docker compose up -d
 | `POST` | `/admin/clients` | Регистрация клиента |
 | `GET` | `/admin/clients` | Список клиентов |
 | `GET` | `/admin/clients/{client_id}` | Клиент по id |
+| `POST` | `/admin/users` | Создание пользователя |
+| `GET` | `/admin/users` | Список пользователей |
+| `GET` | `/admin/users/{user_id}` | Пользователь по id |
+| `PUT` | `/admin/users/{user_id}` | Обновление email/roles/enabled |
+| `PUT` | `/admin/users/{user_id}/password` | Смена пароля |
 | `GET` | `/health/live`, `/health/ready` | Health checks |
 
 ### Health
@@ -176,6 +183,43 @@ curl -s -X POST http://localhost:8080/admin/clients \
   "error_description": "Client not found"
 }
 ```
+
+---
+
+## Управление пользователями (Admin API)
+
+Эндпоинты `/admin/users/**` используют тот же заголовок `X-Admin-Api-Key`.  
+Пароли **никогда** не возвращаются в ответах.
+
+### `POST /admin/users`
+
+| Поле | Обязательно | Описание |
+|------|-------------|----------|
+| `username` | да | Уникальный логин |
+| `password` | да | Минимум 8 символов |
+| `email` | нет | Email |
+| `roles` | нет | По умолчанию `["user"]` |
+| `enabled` | нет | По умолчанию `true` |
+
+**Ответ `201`:** `id`, `username`, `email`, `roles`, `enabled`, `created_at`.
+
+### `GET /admin/users` / `GET /admin/users/{user_id}`
+
+Список или один пользователь без password hash. Неизвестный id → `404`.
+
+### `PUT /admin/users/{user_id}`
+
+Обновление `email`, `roles`, `enabled` (хотя бы одно поле обязательно).
+
+### `PUT /admin/users/{user_id}/password`
+
+```json
+{ "new_password": "new-secret123" }
+```
+
+Успех: `204 No Content`. После смены пароля старый пароль не принимается при login.
+
+Подробнее о OAuth-потоке для клиентов: [docs/IntegrationGuide.md](docs/IntegrationGuide.md).
 
 ---
 

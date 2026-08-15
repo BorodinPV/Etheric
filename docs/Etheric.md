@@ -56,6 +56,9 @@
 - **Production env-based config** — `ETHERIC_*` переменные окружения для PostgreSQL, Redis, Admin API, JWT issuer, CORS
 - **Production startup validation** — `ProductionConfigValidator` (профиль `prod`): блокирует дефолтный admin key и небезопасный CORS
 - **Dev seed отключён в prod** — `DevSeedService` только в профилях `dev` / `test`
+- **Admin User API** — `/admin/users` (CRUD профиля, смена пароля)
+- **Integration Guide** — [`docs/IntegrationGuide.md`](IntegrationGuide.md) для разработчиков клиентских приложений
+- **Quarkus REST** — `quarkus-rest` / `quarkus-rest-jackson` (миграция с RESTEasy Reactive)
 
 ### Отложено (DEFERRED)
 
@@ -374,16 +377,7 @@
 
 ## 6. Документация для разработчиков (API Reference)
 
-Для клиентов, подключающихся к серверу, необходимо предоставить документацию, описывающую:
-
-- Как зарегистрировать клиентское приложение.
-- Какие эндпоинты доступны (`/authorize`, `/token`, `/.well-known/jwks.json`).
-- Какие параметры и в каком формате ожидаются.
-- Примеры запросов и ответов (включая ошибки).
-- Рекомендации по безопасности (использование `state`, хранение `client_secret`, использование HTTPS).
-- Описание формата JWT (клеймы, алгоритм подписи).
-
-Документация может быть в виде отдельного файла (например, README или OpenAPI-спецификации) и должна быть доступна разработчикам.
+Для клиентов, подключающихся к серверу, см. **[Integration Guide](IntegrationGuide.md)** — регистрация клиента, Authorization Code Flow, PKCE, OIDC, introspection/revocation, JWT claims, ошибки и рекомендации по безопасности.
 
 ---
 

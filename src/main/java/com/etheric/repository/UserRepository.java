@@ -9,6 +9,7 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -40,6 +41,21 @@ public class UserRepository implements PanacheRepository<User> {
             }
             return Uni.createFrom().item(Optional.empty());
         });
+    }
+
+    @WithSession
+    public Uni<List<User>> findAllUsers() {
+        return listAll();
+    }
+
+    @WithSession
+    public Uni<Boolean> usernameExists(String username) {
+        return count("username", username).map(count -> count > 0);
+    }
+
+    @WithTransaction
+    public Uni<User> persistUser(User user) {
+        return persist(user).replaceWith(user);
     }
 
     @WithTransaction
