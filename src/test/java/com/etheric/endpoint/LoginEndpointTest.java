@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static com.etheric.testsupport.TestSupport.await;
+import static com.etheric.testsupport.TestSupport.awaitVoid;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -84,9 +86,9 @@ class LoginEndpointTest {
     @Test
     void postLogin_validCredentials_withState_redirectsToConsent() {
         String state = "login-test-state";
-        cacheService.saveAuthorizationRequestState(state, new AuthorizationRequestState(
-            "test-client", "http://localhost:8080/callback", List.of("openid"), state, null
-        ), 600);
+        awaitVoid(cacheService.saveAuthorizationRequestState(state, new AuthorizationRequestState(
+            "test-client", "http://localhost:8080/callback", List.of("openid"), state, null, null, null, null
+        ), 600));
 
         LoginChallenge challenge = openLogin(state);
 
@@ -178,9 +180,9 @@ class LoginEndpointTest {
     @Test
     void postLogin_validCredentials_updatesRequestState() {
         String state = "update-test-state";
-        cacheService.saveAuthorizationRequestState(state, new AuthorizationRequestState(
-            "test-client", "http://localhost:8080/callback", List.of("openid"), state, null
-        ), 600);
+        awaitVoid(cacheService.saveAuthorizationRequestState(state, new AuthorizationRequestState(
+            "test-client", "http://localhost:8080/callback", List.of("openid"), state, null, null, null, null
+        ), 600));
 
         LoginChallenge challenge = openLogin(state);
 
@@ -197,7 +199,7 @@ class LoginEndpointTest {
         .then()
             .statusCode(303);
 
-        var updatedState = cacheService.getAuthorizationRequestState(state);
+        var updatedState = await(cacheService.getAuthorizationRequestState(state));
         if (updatedState != null) {
             assert updatedState.getUserId() != null;
         }

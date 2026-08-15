@@ -1,35 +1,24 @@
 package com.etheric.service;
 
+import io.quarkus.elytron.security.common.BcryptUtil;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
-
+/**
+ * Bcrypt password hashing for user passwords and client secrets.
+ */
 @ApplicationScoped
 public class PasswordService {
 
     private static final Logger LOG = Logger.getLogger(PasswordService.class);
 
     public String hashPassword(String password) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(password.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("Failed to hash password", e);
-        }
+        return BcryptUtil.bcryptHash(password);
     }
 
     public boolean verifyPassword(String password, String passwordHash) {
         try {
-            String hashedInput = hashPassword(password);
-            return MessageDigest.isEqual(
-                    hashedInput.getBytes(StandardCharsets.UTF_8),
-                    passwordHash.getBytes(StandardCharsets.UTF_8)
-            );
+            return BcryptUtil.matches(password, passwordHash);
         } catch (Exception e) {
             LOG.warnf("Password verification failed: %s", e.getMessage());
             return false;

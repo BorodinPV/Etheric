@@ -1,89 +1,78 @@
 package com.etheric.repository;
 
 import com.etheric.entity.Client;
+import io.quarkus.hibernate.reactive.panache.PanacheRepository;
+import io.quarkus.hibernate.reactive.panache.common.WithSession;
+import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
+import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 
-import java.time.LocalDateTime;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
 
 @ApplicationScoped
-public class ClientRepository {
+public class ClientRepository implements PanacheRepository<Client> {
 
-    private final Map<String, Client> clientsByClientId = new ConcurrentHashMap<>();
-
-    public ClientRepository() {
-        initTestData();
+    @WithSession
+    public Uni<Optional<Client>> findByClientId(String clientId) {
+        return find("clientId", clientId).firstResult().map(Optional::ofNullable);
     }
 
-    public Optional<Client> findByClientId(String clientId) {
-        return Optional.ofNullable(clientsByClientId.get(clientId));
-    }
-
-    public boolean isValidClient(String clientId, String clientSecretHash) {
-        return clientsByClientId.values().stream()
-                .filter(c -> c.getClientId().equals(clientId))
-                .filter(Client::isEnabled)
-                .anyMatch(c -> c.getClientSecretHash().equals(clientSecretHash));
-    }
-
-    public List<String> getRedirectUris(String clientId) {
+    @WithSession
+    public Uni<List<String>> getRedirectUris(String clientId) {
         return findByClientId(clientId)
-                .map(Client::getRedirectUris)
-                .orElse(Collections.emptyList());
+                .map(opt -> opt.map(c -> c.redirectUris).orElse(Collections.emptyList()));
     }
 
-    public List<String> getScopes(String clientId) {
+    @WithSession
+    public Uni<List<String>> getScopes(String clientId) {
         return findByClientId(clientId)
-                .map(Client::getScopes)
-                .orElse(Collections.emptyList());
+                .map(opt -> opt.map(c -> c.scopes).orElse(Collections.emptyList()));
     }
 
-    public List<String> getGrantTypes(String clientId) {
+    @WithSession
+    public Uni<List<String>> getGrantTypes(String clientId) {
         return findByClientId(clientId)
-                .map(Client::getGrantTypes)
-                .orElse(Collections.emptyList());
+                .map(opt -> opt.map(c -> c.grantTypes).orElse(Collections.emptyList()));
     }
 
-    public boolean isRedirectUriValid(String clientId, String redirectUri) {
-        return getRedirectUris(clientId).contains(redirectUri);
+    @WithSession
+    public Uni<Boolean> isRedirectUriValid(String clientId, String redirectUri) {
+        return getRedirectUris(clientId).map(uris -> uris.contains(redirectUri));
     }
 
-    public boolean isScopeValid(String clientId, List<String> requestedScopes) {
+    @WithSession
+    public Uni<Boolean> isScopeValid(String clientId, List<String> requestedScopes) {
         if (requestedScopes == null || requestedScopes.isEmpty()) {
-            return true;
+            return Uni.createFrom().item(true);
         }
-        List<String> allowedScopes = getScopes(clientId);
-        return allowedScopes.containsAll(requestedScopes);
+        return getScopes(clientId).map(allowed -> allowed.containsAll(requestedScopes));
     }
 
-    public boolean isGrantTypeSupported(String clientId, String grantType) {
-        return getGrantTypes(clientId).contains(grantType);
+    @WithSession
+    public Uni<Boolean> isGrantTypeSupported(String clientId, String grantType) {
+        return getGrantTypes(clientId).map(types -> types.contains(grantType));
     }
 
-    public Client save(Client client) {
-        clientsByClientId.put(client.getClientId(), client);
-        return client;
+    @WithSession
+    public Uni<Boolean> isRegisteredRedirectUri(String redirectUri) {
+        if (redirectUri == null || redirectUri.isBlank()) {
+            return Uni.createFrom().item(false);
+        }
+        return find("enabled", true).list()
+                .map(clients -> clients.stream()
+                        .flatMap(client -> client.redirectUris.stream())
+                        .anyMatch(registered -> registered.equals(redirectUri)));
     }
 
-    public List<Client> findAll() {
-        return List.copyOf(clientsByClientId.values());
+    @WithTransaction
+    public Uni<Client> persistClient(Client client) {
+        return persist(client).replaceWith(client);
     }
 
-    private void initTestData() {
-        Client testClient = new Client(
-                UUID.randomUUID(),
-                "test-client",
-                "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
-                "Test Application",
-                List.of("http://localhost:8080/callback", "http://localhost:3000/callback"),
-                List.of("openid", "profile", "email"),
-                List.of("authorization_code", "refresh_token"),
-                true,
-                LocalDateTime.now(),
-                null,
-                "A test OAuth client application"
-        );
-        clientsByClientId.put(testClient.getClientId(), testClient);
+    @WithSession
+    public Uni<List<Client>> findAllClients() {
+        return listAll();
     }
 }

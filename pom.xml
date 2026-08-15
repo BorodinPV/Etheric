@@ -61,6 +61,16 @@
             <artifactId>quarkus-reactive-pg-client</artifactId>
         </dependency>
 
+        <!-- JDBC PostgreSQL + Flyway migrations -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jdbc-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-flyway</artifactId>
+        </dependency>
+
         <!-- Redis Client -->
         <dependency>
             <groupId>io.quarkus</groupId>

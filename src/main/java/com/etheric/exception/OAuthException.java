@@ -1,5 +1,8 @@
 package com.etheric.exception;
 
+/**
+ * Application-level OAuth protocol error with optional redirect context.
+ */
 public class OAuthException extends RuntimeException {
 
     private final OAuthError error;

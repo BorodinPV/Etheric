@@ -1,23 +1,55 @@
 package com.etheric.entity;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.etheric.persistence.StringListJsonConverter;
+import io.quarkus.hibernate.reactive.panache.PanacheEntityBase;
+import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class User {
+@Entity
+@Table(name = "users")
+public class User extends PanacheEntityBase {
 
-    private UUID id;
-    private String username;
-    private String passwordHash;
-    private String email;
-    private List<String> roles;
-    private boolean enabled;
-    private LocalDateTime createdAt;
+    @Id
+    @Column(name = "id")
+    public UUID id;
+
+    @Column(name = "username", nullable = false, unique = true)
+    public String username;
+
+    @Column(name = "password_hash", nullable = false)
+    public String passwordHash;
+
+    @Column(name = "email")
+    public String email;
+
+    @Convert(converter = StringListJsonConverter.class)
+    @Column(name = "roles", nullable = false, columnDefinition = "jsonb")
+    public List<String> roles;
+
+    @Column(name = "enabled", nullable = false)
+    public boolean enabled;
+
+    @Column(name = "created_at", nullable = false)
+    public OffsetDateTime createdAt;
+
+    public User() {
+    }
+
+    public User(UUID id, String username, String passwordHash, String email,
+                List<String> roles, boolean enabled, OffsetDateTime createdAt) {
+        this.id = id;
+        this.username = username;
+        this.passwordHash = passwordHash;
+        this.email = email;
+        this.roles = roles;
+        this.enabled = enabled;
+        this.createdAt = createdAt;
+    }
 }

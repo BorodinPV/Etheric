@@ -4,21 +4,42 @@
 
 ## Быстрый старт
 
+### 1. Инфраструктура (PostgreSQL + Redis)
+
+Требуется [Docker Desktop](https://www.docker.com/products/docker-desktop/) (или совместимый runtime).
+
+```bash
+docker compose up -d
+```
+
+Сервисы:
+
+| Сервис | Порт | Учётные данные |
+|--------|------|----------------|
+| PostgreSQL | 5432 | `etheric` / `etheric`, БД `etheric` |
+| Redis | 6379 | без пароля |
+
+Проверка: `docker compose ps` — оба контейнера в статусе `healthy`.
+
+### 2. Запуск сервера
+
 ```bash
 ./mvnw quarkus:dev
 ```
 
 Сервер: `http://localhost:8080`
 
-Тестовые учётные данные (dev):
+При первом старте Flyway создаёт схему, `DevSeedService` добавляет тестового клиента и пользователя (если таблицы пусты).
+
+Тестовые учётные данные (dev seed):
 
 | Тип | Значение |
 |-----|----------|
 | Пользователь | `user` / `password` |
-| Клиент | `test-client` (секрет в seed — для демо; регистрируйте новых клиентов через Admin API) |
+| Клиент | `test-client` / `secret` |
 | Admin API key (dev) | `dev-admin-key` |
 
-> Сейчас клиенты и сессии живут in-memory (Redis/PostgreSQL в конфиге зарезервированы под дальнейшую интеграцию).
+> Клиенты и пользователи хранятся в **PostgreSQL**, сессии, коды и токены — в **Redis**.
 
 ---
 
@@ -115,8 +136,23 @@ curl -s -X POST http://localhost:8080/admin/clients \
 | `redirect_uri` | да | Должен быть в whitelist клиента |
 | `state` | да | CSRF-защита (обязателен) |
 | `scope` | нет | Повторяемые query-параметры, напр. `scope=openid&scope=profile` |
+| `code_challenge` | нет* | PKCE challenge ([RFC 7636](https://www.rfc-editor.org/info/rfc7636)) |
+| `code_challenge_method` | нет | `S256` (по умолчанию) или `plain`; только вместе с `code_challenge` |
+| `nonce` | нет | Зарезервировано под OIDC |
 
-**Пример:**
+\* Если передан `code_challenge`, на `/token` обязателен `code_verifier`.
+
+**Пример с PKCE (S256):**
+
+Сгенерируйте `code_verifier` (43–128 символов) и `code_challenge = BASE64URL(SHA256(code_verifier))`, затем:
+
+```
+http://localhost:8080/authorize?response_type=code&client_id=test-client&redirect_uri=http://localhost:8080/callback&state=xyz&code_challenge=CHALLENGE&code_challenge_method=S256
+```
+
+На `/token` передайте тот же `code_verifier`.
+
+**Пример без PKCE:**
 
 ```
 http://localhost:8080/authorize?response_type=code&client_id=test-client&redirect_uri=http://localhost:8080/callback&state=xyz&scope=openid&scope=profile
@@ -155,6 +191,9 @@ HTML. POST: `action=approve|deny`, `state`, `csrf_token`.
 | `redirect_uri` | да (должен совпасть с сохранённым) |
 | `client_id` | да |
 | `client_secret` | да |
+| `code_verifier` | да*, если на `/authorize` был `code_challenge` |
+
+\* Без PKCE на authorize — `code_verifier` не требуется.
 
 ```bash
 curl -s -X POST http://localhost:8080/token \
@@ -163,8 +202,13 @@ curl -s -X POST http://localhost:8080/token \
   -d "code=AUTH_CODE" \
   -d "redirect_uri=http://localhost:8080/callback" \
   -d "client_id=test-client" \
-  -d "client_secret=YOUR_SECRET"
+  -d "client_secret=secret" \
+  -d "code_verifier=YOUR_CODE_VERIFIER"
 ```
+
+При неверном `client_id` или `client_secret` → `401` с `error=invalid_client`.  
+Если `client_id` не совпадает с клиентом, выдавшим auth code → `400` с `error=invalid_grant`.  
+При неверном или отсутствующем `code_verifier` (если был PKCE) → `400 invalid_grant`.
 
 **Ответ `200`:**
 
@@ -185,10 +229,11 @@ curl -s -X POST http://localhost:8080/token \
 | Параметр | Обязательно |
 |----------|-------------|
 | `refresh_token` | да |
-| `client_id` | да |
+| `client_id` | да (должен совпасть с клиентом refresh-токена) |
+| `client_secret` | нет (если передан — проверяется) |
 | `scope` | нет |
 
-Старый refresh-токен отзывается (ротация).
+Старый refresh-токен отзывается (ротация). Неизвестный `client_id` → `401 invalid_client`.
 
 ### 5. Logout — `GET /logout`
 
@@ -204,15 +249,15 @@ curl -s -X POST http://localhost:8080/token \
 
 | Claim | Описание |
 |-------|----------|
-| `sub` | Id пользователя |
-| `groups` | Роли |
+| `sub` | Id пользователя (UUID) |
+| `groups` | Роли из PostgreSQL (`users.roles`) |
 | `scopes` | Список scope |
 | `iat` / `exp` | Время выдачи / истечения |
 | `token_type` | Только у refresh: `refresh` |
 
-Заголовок JWT содержит `kid` (ключ ротируется при рестарте процесса — для dev).
+Подпись **RS256**. Ключи загружаются из PEM (`etheric.jwt.private-key-location` / `public-key-location`); при отсутствии файлов — эфемерная пара (WARN в логе, только dev). Заголовок JWT содержит стабильный `kid` (хеш публичного ключа).
 
-TTL по умолчанию: access **1 ч**, refresh **7 дней**, auth code **10 мин** (см. `etheric.jwt.*` в конфиге).
+TTL берётся из конфига (`etheric.jwt.access-token-lifetime`, `refresh-token-lifetime`) и совпадает с TTL записей в Redis. По умолчанию: access **1 ч**, refresh **7 дней**, auth code **10 мин**.
 
 ---
 
@@ -233,10 +278,11 @@ JSON на Token Endpoint / admin:
 ## Безопасность (рекомендации)
 
 1. Всегда передавайте и проверяйте **`state`**.
-2. Храните **`client_secret`** только на сервере клиента; не логируйте его.
-3. В production используйте **HTTPS**; cookie сессии с `Secure` (`etheric.session.cookie.secure=true`).
-4. Смените **`etheric.admin.api-key`** — не оставляйте значение по умолчанию.
-5. Не коммитьте секреты; `client_secret` из Admin API показывается один раз.
+2. На **`/token`** (grant `authorization_code`) **`client_secret` обязателен** и проверяется; неверные credentials → `401 invalid_client`.
+3. Храните **`client_secret`** только на сервере клиента; не логируйте его.
+4. В production используйте **HTTPS**; cookie сессии с `Secure` (`etheric.session.cookie.secure=true`).
+5. Смените **`etheric.admin.api-key`** — не оставляйте значение по умолчанию.
+6. Не коммитьте секреты; `client_secret` из Admin API показывается один раз.
 
 ---
 
@@ -246,8 +292,9 @@ JSON на Token Endpoint / admin:
 
 - `etheric.admin.api-key` — ключ Admin API  
 - `etheric.session.cookie.secure` — флаг Secure у `SESSIONID`  
-- `etheric.jwt.*` — TTL токенов / issuer / пути ключей  
-- PostgreSQL / Redis — подготовлены в конфиге под дальнейшую wiring
+- `etheric.jwt.*` — TTL токенов, issuer, пути ключей  
+- PostgreSQL — `quarkus.datasource.*` (клиенты, пользователи)  
+- Redis — `quarkus.redis.hosts` (сессии, коды, токены)
 
 Архитектурный документ: [`docs/Etheric.md`](docs/Etheric.md).
 
@@ -255,6 +302,11 @@ JSON на Token Endpoint / admin:
 
 ## Тесты
 
+Требуется **Docker**. Dev Services **отключены** в `src/test/resources/application.properties` — перед запуском тестов поднимите инфраструктуру:
+
 ```bash
+docker compose up -d
 ./mvnw test
 ```
+
+Тесты подключаются к PostgreSQL (`localhost:5432`, `etheric` / `etheric`) и Redis (`localhost:6379`). Admin API key в тестовом профиле: `test-admin-key` (`%test.etheric.admin.api-key`).

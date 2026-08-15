@@ -1,12 +1,16 @@
 package com.etheric.endpoint;
 
+import com.etheric.repository.ClientRepository;
 import com.etheric.service.CacheService;
 import com.etheric.util.SessionCookieFactory;
+import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.*;
+
+import java.net.URI;
 
 @Path("/logout")
 public class LogoutEndpoint {
@@ -17,30 +21,28 @@ public class LogoutEndpoint {
     @Inject
     SessionCookieFactory sessionCookieFactory;
 
+    @Inject
+    ClientRepository clientRepository;
+
     @GET
-    public Response logout(@QueryParam("redirect_uri") String redirectUri, @Context HttpHeaders headers) {
-        String sessionId = extractSessionId(headers);
+    public Uni<Response> logout(@QueryParam("redirect_uri") String redirectUri, @Context HttpHeaders headers) {
+        String sessionId = SessionCookieFactory.extractSessionId(headers);
 
-        if (sessionId != null) {
-            cacheService.deleteSession(sessionId);
-        }
+        Uni<Void> deleteSession = sessionId != null
+                ? cacheService.deleteSession(sessionId)
+                : Uni.createFrom().voidItem();
 
-        return Response.seeOther(java.net.URI.create(redirectUri != null ? redirectUri : "/"))
-                .header("Set-Cookie", sessionCookieFactory.clear())
-                .build();
+        return deleteSession.flatMap(v -> resolveRedirectTarget(redirectUri))
+                .map(target -> Response.seeOther(target)
+                        .header("Set-Cookie", sessionCookieFactory.clear())
+                        .build());
     }
 
-    private String extractSessionId(HttpHeaders headers) {
-        String cookie = headers.getHeaderString("Cookie");
-        if (cookie != null && cookie.contains(SessionCookieFactory.COOKIE_NAME + "=")) {
-            String[] parts = cookie.split(SessionCookieFactory.COOKIE_NAME + "=");
-            if (parts.length > 1) {
-                String value = parts[1].split(";")[0].trim();
-                if (!value.isEmpty()) {
-                    return value;
-                }
-            }
+    private Uni<URI> resolveRedirectTarget(String redirectUri) {
+        if (redirectUri == null || redirectUri.isBlank()) {
+            return Uni.createFrom().item(URI.create("/"));
         }
-        return null;
+        return clientRepository.isRegisteredRedirectUri(redirectUri)
+                .map(valid -> valid ? URI.create(redirectUri) : URI.create("/"));
     }
 }

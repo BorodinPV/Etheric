@@ -109,20 +109,20 @@ class JwtServiceTest {
     @Test
     void parseToken_validToken() {
         String token = jwtService.generateAccessToken("user1", List.of("user"), List.of("openid"));
-        JsonWebToken jwt = jwtService.parseToken(token);
+        JsonWebToken jwt = jwtService.parseToken(token).orElseThrow();
         assertNotNull(jwt);
         assertEquals("user1", jwt.getSubject());
     }
 
     @Test
     void parseToken_invalidToken() {
-        assertNull(jwtService.parseToken("invalid.token.here"));
+        assertTrue(jwtService.parseToken("invalid.token.here").isEmpty());
     }
 
     @Test
     void parseToken_refreshTokenHasClaims() {
         String token = jwtService.generateRefreshToken("user1", List.of("user"), List.of("openid", "email"));
-        JsonWebToken jwt = jwtService.parseToken(token);
+        JsonWebToken jwt = jwtService.parseToken(token).orElseThrow();
         assertNotNull(jwt);
         assertEquals("user1", jwt.getSubject());
         assertNotNull(jwt.getClaim("token_type"));

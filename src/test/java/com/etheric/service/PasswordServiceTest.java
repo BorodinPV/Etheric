@@ -13,17 +13,10 @@ class PasswordServiceTest {
     PasswordService passwordService;
 
     @Test
-    void hashPassword_returnsNonEmptyString() {
+    void hashPassword_producesBcryptHash() {
         String hash = passwordService.hashPassword("test123");
         assertNotNull(hash);
-        assertFalse(hash.isEmpty());
-    }
-
-    @Test
-    void hashPassword_sameInputProducesSameHash() {
-        String hash1 = passwordService.hashPassword("mypassword");
-        String hash2 = passwordService.hashPassword("mypassword");
-        assertEquals(hash1, hash2);
+        assertTrue(hash.startsWith("$2a$") || hash.startsWith("$2b$"));
     }
 
     @Test

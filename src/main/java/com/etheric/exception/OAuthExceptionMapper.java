@@ -1,6 +1,7 @@
 package com.etheric.exception;
 
 import com.etheric.model.ErrorResponse;
+import com.etheric.util.OAuthRedirectBuilder;
 import io.vertx.core.http.HttpServerResponse;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
@@ -9,9 +10,10 @@ import jakarta.ws.rs.ext.Provider;
 import org.jboss.logging.Logger;
 
 import java.net.URI;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
+/**
+ * Maps {@link OAuthException} to redirect or JSON error responses.
+ */
 @Provider
 public class OAuthExceptionMapper implements ExceptionMapper<OAuthException> {
 
@@ -32,10 +34,10 @@ public class OAuthExceptionMapper implements ExceptionMapper<OAuthException> {
     }
 
     private Response handleRedirect(OAuthException exception) {
-        URI redirectUri = buildRedirectUri(
+        URI redirectUri = OAuthRedirectBuilder.oauthError(
                 exception.getRedirectUri(),
                 exception.getError().getError(),
-                exception.getError(),
+                exception.getError().getErrorDescription(),
                 exception.getState()
         );
 
@@ -53,22 +55,5 @@ public class OAuthExceptionMapper implements ExceptionMapper<OAuthException> {
         return Response.status(exception.getHttpStatus())
                 .entity(errorResponse)
                 .build();
-    }
-
-    private URI buildRedirectUri(String baseUri, String error, OAuthError oauthError, String state) {
-        StringBuilder uriBuilder = new StringBuilder(baseUri);
-        uriBuilder.append(baseUri.contains("?") ? "&" : "?");
-        uriBuilder.append("error=").append(error);
-
-        if (oauthError.getErrorDescription() != null) {
-            uriBuilder.append("&error_description=")
-                    .append(URLEncoder.encode(oauthError.getErrorDescription(), StandardCharsets.UTF_8));
-        }
-
-        if (state != null) {
-            uriBuilder.append("&state=").append(state);
-        }
-
-        return URI.create(uriBuilder.toString());
     }
 }

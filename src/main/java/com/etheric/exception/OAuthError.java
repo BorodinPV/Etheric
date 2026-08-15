@@ -1,5 +1,8 @@
 package com.etheric.exception;
 
+/**
+ * OAuth 2.0 / OIDC error codes with standard descriptions.
+ */
 public enum OAuthError {
 
     INVALID_REQUEST("invalid_request", "The request is missing a required parameter or is otherwise malformed."),

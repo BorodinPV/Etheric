@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.UUID;
 
+import static com.etheric.testsupport.TestSupport.await;
+import static com.etheric.testsupport.TestSupport.awaitVoid;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
@@ -23,15 +25,15 @@ class ConsentEndpointTest {
 
     private String createSession(String userId) {
         String sessionId = UUID.randomUUID().toString();
-        cacheService.saveSession(sessionId, new SessionData(userId, null, System.currentTimeMillis()), 1800);
+        awaitVoid(cacheService.saveSession(sessionId, new SessionData(userId, null, System.currentTimeMillis()), 1800));
         return sessionId;
     }
 
     private String createState(String clientId, String redirectUri, String userId) {
         String state = UUID.randomUUID().toString();
-        cacheService.saveAuthorizationRequestState(state, new AuthorizationRequestState(
-            clientId, redirectUri, List.of("openid", "profile"), state, userId
-        ), 600);
+        awaitVoid(cacheService.saveAuthorizationRequestState(state, new AuthorizationRequestState(
+            clientId, redirectUri, List.of("openid", "profile"), state, userId, null, null, null
+        ), 600));
         return state;
     }
 
@@ -103,7 +105,7 @@ class ConsentEndpointTest {
             .statusCode(200)
             .body(containsString("csrf_token"));
 
-        String csrfToken = cacheService.getSession(sessionId).getCsrfToken();
+        String csrfToken = await(cacheService.getSession(sessionId)).getCsrfToken();
 
         given()
             .contentType(ContentType.URLENC)
@@ -122,7 +124,7 @@ class ConsentEndpointTest {
             ));
 
         // Verify request state was deleted
-        assertNull(cacheService.getAuthorizationRequestState(state));
+        assertNull(await(cacheService.getAuthorizationRequestState(state)));
     }
 
     @Test
@@ -139,7 +141,7 @@ class ConsentEndpointTest {
             .statusCode(200)
             .body(containsString("csrf_token"));
 
-        String csrfToken = cacheService.getSession(sessionId).getCsrfToken();
+        String csrfToken = await(cacheService.getSession(sessionId)).getCsrfToken();
 
         given()
             .contentType(ContentType.URLENC)
@@ -182,6 +184,41 @@ class ConsentEndpointTest {
             .post("/consent")
         .then()
             .statusCode(403);
+    }
+
+    @Test
+    void postConsent_approve_redirectsWithEncodedParameters() {
+        String sessionId = createSession("user1");
+        String state = "state/with+special&chars";
+        awaitVoid(cacheService.saveAuthorizationRequestState(state, new AuthorizationRequestState(
+            "test-client", "http://localhost:8080/callback", List.of("openid"), state, "user1", null, null, null
+        ), 600));
+
+        given()
+            .queryParam("state", state)
+            .cookie("SESSIONID", sessionId)
+        .when()
+            .get("/consent")
+        .then()
+            .statusCode(200);
+
+        String csrfToken = await(cacheService.getSession(sessionId)).getCsrfToken();
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("action", "approve")
+            .formParam("state", state)
+            .formParam("csrf_token", csrfToken)
+            .cookie("SESSIONID", sessionId)
+            .redirects().follow(false)
+        .when()
+            .post("/consent")
+        .then()
+            .statusCode(303)
+            .header("Location", allOf(
+                containsString("code="),
+                containsString("state=state%2Fwith%2Bspecial%26chars")
+            ));
     }
 
     @Test

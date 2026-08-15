@@ -1,5 +1,6 @@
 package com.etheric.service;
 
+import com.etheric.config.EthericTtlConfig;
 import com.etheric.model.JwkKey;
 import com.etheric.model.JwksResponse;
 import io.smallrye.jwt.algorithm.SignatureAlgorithm;
@@ -9,18 +10,32 @@ import io.smallrye.jwt.build.JwtClaimsBuilder;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.jwt.Claims;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.logging.Logger;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
-import java.util.*;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.List;
+import java.util.Optional;
 
+/**
+ * JWT signing, verification, and JWKS exposure.
+ */
 @ApplicationScoped
 public class JwtService {
 
@@ -29,8 +44,8 @@ public class JwtService {
     @Inject
     JWTParser jwtParser;
 
-    @ConfigProperty(name = "etheric.jwt.issuer", defaultValue = "http://localhost:8080")
-    String issuer;
+    @Inject
+    EthericTtlConfig ttlConfig;
 
     private RSAPublicKey publicKey;
     private RSAPrivateKey privateKey;
@@ -38,24 +53,100 @@ public class JwtService {
 
     @PostConstruct
     public void init() {
+        Optional<String> privateLoc = ttlConfig.privateKeyLocation();
+        Optional<String> publicLoc = ttlConfig.publicKeyLocation();
+
+        if (privateLoc.isPresent() && publicLoc.isPresent()) {
+            try {
+                RSAPrivateKey loadedPrivate = loadPrivateKey(privateLoc.get());
+                RSAPublicKey loadedPublic = loadPublicKey(publicLoc.get());
+                if (loadedPrivate != null && loadedPublic != null) {
+                    privateKey = loadedPrivate;
+                    publicKey = loadedPublic;
+                    keyId = deriveKeyId(publicKey);
+                    LOG.infof("RSA key pair loaded from PEM (kid=%s)", keyId);
+                    return;
+                }
+            } catch (Exception e) {
+                LOG.warnf("Failed to load RSA keys from PEM: %s", e.getMessage());
+            }
+        }
+        generateEphemeralKeys();
+    }
+
+    private void generateEphemeralKeys() {
+        LOG.warn("Using ephemeral RSA key pair for JWT signing (dev only)");
         try {
             KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
             keyPairGenerator.initialize(2048);
             KeyPair keyPair = keyPairGenerator.generateKeyPair();
             publicKey = (RSAPublicKey) keyPair.getPublic();
             privateKey = (RSAPrivateKey) keyPair.getPrivate();
-            keyId = UUID.randomUUID().toString();
-            LOG.info("RSA key pair generated for JWT signing");
+            keyId = deriveKeyId(publicKey);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("Failed to generate RSA key pair", e);
         }
     }
 
+    private String deriveKeyId(RSAPublicKey key) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(key.getModulus().toByteArray());
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(Arrays.copyOf(hash, 16));
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 not available", e);
+        }
+    }
+
+    private RSAPrivateKey loadPrivateKey(String location) throws Exception {
+        try (InputStream is = openKeyStream(location)) {
+            if (is == null) {
+                return null;
+            }
+            byte[] der = readPemBytes(is);
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            return (RSAPrivateKey) keyFactory.generatePrivate(new PKCS8EncodedKeySpec(der));
+        }
+    }
+
+    private RSAPublicKey loadPublicKey(String location) throws Exception {
+        try (InputStream is = openKeyStream(location)) {
+            if (is == null) {
+                return null;
+            }
+            byte[] der = readPemBytes(is);
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            return (RSAPublicKey) keyFactory.generatePublic(new X509EncodedKeySpec(der));
+        }
+    }
+
+    private InputStream openKeyStream(String location) throws IOException {
+        String path = location.startsWith("classpath:") ? location.substring("classpath:".length()) : location;
+        InputStream classpathStream = getClass().getClassLoader().getResourceAsStream(path);
+        if (classpathStream != null) {
+            return classpathStream;
+        }
+        Path filePath = Path.of(path);
+        if (Files.exists(filePath)) {
+            return Files.newInputStream(filePath);
+        }
+        return null;
+    }
+
+    private byte[] readPemBytes(InputStream is) throws IOException {
+        String pem = new String(is.readAllBytes(), StandardCharsets.US_ASCII);
+        String base64 = pem
+                .replaceAll("-----BEGIN[^-]+-----", "")
+                .replaceAll("-----END[^-]+-----", "")
+                .replaceAll("\\s", "");
+        return Base64.getDecoder().decode(base64);
+    }
+
     public String generateAccessToken(String userId, List<String> roles, List<String> scopes) {
         long now = System.currentTimeMillis() / 1000;
-        long expiry = 3600;
+        long expiry = ttlConfig.accessTokenLifetime();
 
-        return Jwt.issuer(issuer)
+        return Jwt.issuer(ttlConfig.issuer())
                 .claim(Claims.sub, userId)
                 .claim(Claims.groups, roles)
                 .claim("scopes", scopes)
@@ -68,9 +159,9 @@ public class JwtService {
 
     public String generateRefreshToken(String userId, List<String> roles, List<String> scopes) {
         long now = System.currentTimeMillis() / 1000;
-        long expiry = 604800;
+        long expiry = ttlConfig.refreshTokenLifetime();
 
-        return Jwt.issuer(issuer)
+        return Jwt.issuer(ttlConfig.issuer())
                 .claim(Claims.sub, userId)
                 .claim(Claims.groups, roles)
                 .claim("scopes", scopes)
@@ -85,9 +176,9 @@ public class JwtService {
     public String generateIdToken(String userId, String clientId, String nonce,
                                   List<String> scopes, String email, String username) {
         long now = System.currentTimeMillis() / 1000;
-        long expiry = 3600;
+        long expiry = ttlConfig.accessTokenLifetime();
 
-        JwtClaimsBuilder builder = Jwt.issuer(issuer)
+        JwtClaimsBuilder builder = Jwt.issuer(ttlConfig.issuer())
                 .subject(userId)
                 .audience(clientId)
                 .issuedAt(now)
@@ -114,7 +205,7 @@ public class JwtService {
     }
 
     public String generateAuthorizationCode() {
-        return UUID.randomUUID().toString();
+        return java.util.UUID.randomUUID().toString();
     }
 
     public boolean verifyToken(String token) {
@@ -127,12 +218,18 @@ public class JwtService {
         }
     }
 
-    public JsonWebToken parseToken(String token) {
+    /**
+     * Verifies and parses a JWT, returning empty when verification fails.
+     *
+     * @param token raw JWT string
+     * @return parsed token or empty when invalid
+     */
+    public Optional<JsonWebToken> parseToken(String token) {
         try {
-            return jwtParser.verify(token, publicKey);
+            return Optional.of(jwtParser.verify(token, publicKey));
         } catch (Exception e) {
             LOG.warnf("Token parsing failed: %s", e.getMessage());
-            return null;
+            return Optional.empty();
         }
     }
 
@@ -165,6 +262,6 @@ public class JwtService {
     }
 
     public String getIssuer() {
-        return issuer;
+        return ttlConfig.issuer();
     }
 }

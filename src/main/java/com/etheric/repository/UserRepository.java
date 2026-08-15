@@ -1,71 +1,51 @@
 package com.etheric.repository;
 
 import com.etheric.entity.User;
+import com.etheric.service.PasswordService;
+import io.quarkus.hibernate.reactive.panache.PanacheRepository;
+import io.quarkus.hibernate.reactive.panache.common.WithSession;
+import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
+import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
-import java.time.LocalDateTime;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Optional;
+import java.util.UUID;
 
 @ApplicationScoped
-public class UserRepository {
+public class UserRepository implements PanacheRepository<User> {
 
-    private final Map<String, User> usersByUsername = new ConcurrentHashMap<>();
-    private final Map<UUID, User> usersById = new ConcurrentHashMap<>();
+    @Inject
+    PasswordService passwordService;
 
-    public UserRepository() {
-        initTestData();
+    @WithSession
+    public Uni<Optional<User>> findByUsername(String username) {
+        return find("username", username).firstResult().map(Optional::ofNullable);
     }
 
-    public Optional<User> findByUsername(String username) {
-        return Optional.ofNullable(usersByUsername.get(username));
+    @WithSession
+    public Uni<Optional<User>> findUserById(UUID id) {
+        return find("id", id).firstResult().map(Optional::ofNullable);
     }
 
-    public Optional<User> findById(UUID id) {
-        return Optional.ofNullable(usersById.get(id));
+    @WithSession
+    public Uni<Optional<User>> authenticate(String username, String password) {
+        return findByUsername(username).flatMap(userOpt -> {
+            if (userOpt.isEmpty() || !userOpt.get().enabled) {
+                return Uni.createFrom().item(Optional.<User>empty());
+            }
+            User user = userOpt.get();
+            if (passwordService.verifyPassword(password, user.passwordHash)) {
+                return Uni.createFrom().item(Optional.of(user));
+            }
+            return Uni.createFrom().item(Optional.empty());
+        });
     }
 
-    public boolean isValidCredentials(String username, String passwordHash) {
-        return usersByUsername.values().stream()
-                .filter(u -> u.getUsername().equals(username))
-                .filter(User::isEnabled)
-                .anyMatch(u -> u.getPasswordHash().equals(passwordHash));
-    }
-
-    public boolean isUserEnabled(String username) {
-        return usersByUsername.values().stream()
-                .filter(u -> u.getUsername().equals(username))
-                .anyMatch(User::isEnabled);
-    }
-
-    public User authenticate(String username, String password) {
-        var userOpt = findByUsername(username);
-        if (userOpt.isEmpty() || !userOpt.get().isEnabled()) {
-            return null;
-        }
-        // For testing: direct password comparison (not hashed)
-        if ("password".equals(password) && "user".equals(username)) {
-            return userOpt.get();
-        }
-        return null;
-    }
-
-    public void updateUser(User user) {
-        usersByUsername.put(user.getUsername(), user);
-        usersById.put(user.getId(), user);
-    }
-
-    private void initTestData() {
-        User testUser = new User(
-                UUID.randomUUID(),
-                "user",
-                "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
-                "user@example.com",
-                List.of("user"),
-                true,
-                LocalDateTime.now()
-        );
-        usersByUsername.put(testUser.getUsername(), testUser);
-        usersById.put(testUser.getId(), testUser);
+    @WithTransaction
+    public Uni<Void> updateUser(User user) {
+        return User.getSession()
+                .flatMap(session -> session.merge(user))
+                .replaceWithVoid();
     }
 }

@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
+import static com.etheric.testsupport.TestSupport.await;
+import static com.etheric.testsupport.TestSupport.awaitVoid;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
@@ -32,7 +34,7 @@ class LogoutEndpointTest {
     @Test
     void logout_withSession_deletesSession() {
         String sessionId = UUID.randomUUID().toString();
-        cacheService.saveSession(sessionId, new SessionData("user1", null, System.currentTimeMillis()), 1800);
+        awaitVoid(cacheService.saveSession(sessionId, new SessionData("user1", null, System.currentTimeMillis()), 1800));
 
         given()
             .cookie("SESSIONID", sessionId)
@@ -45,25 +47,37 @@ class LogoutEndpointTest {
             .header("Set-Cookie", containsString("SESSIONID=;"));
 
         // Verify session was deleted
-        org.junit.jupiter.api.Assertions.assertNull(cacheService.getSession(sessionId));
+        org.junit.jupiter.api.Assertions.assertNull(await(cacheService.getSession(sessionId)));
     }
 
     @Test
-    void logout_withRedirectUri_redirectsToSpecifiedUri() {
+    void logout_withRedirectUri_redirectsToRegisteredUri() {
         given()
-            .queryParam("redirect_uri", "http://example.com/bye")
+            .queryParam("redirect_uri", "http://localhost:8080/callback")
             .redirects().follow(false)
         .when()
             .get("/logout")
         .then()
             .statusCode(303)
-            .header("Location", "http://example.com/bye");
+            .header("Location", "http://localhost:8080/callback");
+    }
+
+    @Test
+    void logout_withUnregisteredRedirectUri_redirectsToRoot() {
+        given()
+            .queryParam("redirect_uri", "http://evil.com/bye")
+            .redirects().follow(false)
+        .when()
+            .get("/logout")
+        .then()
+            .statusCode(303)
+            .header("Location", endsWith("/"));
     }
 
     @Test
     void logout_clearsCookie() {
         String sessionId = UUID.randomUUID().toString();
-        cacheService.saveSession(sessionId, new SessionData("user1", null, System.currentTimeMillis()), 1800);
+        awaitVoid(cacheService.saveSession(sessionId, new SessionData("user1", null, System.currentTimeMillis()), 1800));
 
         given()
             .cookie("SESSIONID", sessionId)

@@ -4,6 +4,7 @@ import com.etheric.model.AuthorizationCodeData;
 import com.etheric.model.RefreshTokenData;
 import com.etheric.service.CacheService;
 import com.etheric.service.JwtService;
+import com.etheric.util.PkceUtil;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import jakarta.inject.Inject;
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static com.etheric.testsupport.TestSupport.await;
+import static com.etheric.testsupport.TestSupport.awaitVoid;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
@@ -92,9 +95,9 @@ class TokenEndpointTest {
     @Test
     void token_authCode_validCode_returnsTokens() {
         String code = "valid-test-code";
-        cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", "user1", "http://localhost:8080/callback", List.of("openid", "profile")
-        ), 600);
+        awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
+            "test-client", "user1", "http://localhost:8080/callback", List.of("openid", "profile"), null, null, null
+        ), 600));
 
         given()
             .contentType(ContentType.URLENC)
@@ -114,15 +117,15 @@ class TokenEndpointTest {
             .body("scope", equalTo("openid profile"));
 
         // Verify code was deleted (one-time use)
-        assertNull(cacheService.getAuthorizationCode(code));
+        assertNull(await(cacheService.getAuthorizationCode(code)));
     }
 
     @Test
     void token_authCode_codeOneTimeUse_codeDeletedAfterUse() {
         String code = "one-time-code";
-        cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", "user1", "http://localhost:8080/callback", List.of("openid")
-        ), 600);
+        awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
+            "test-client", "user1", "http://localhost:8080/callback", List.of("openid"), null, null, null
+        ), 600));
 
         // First request succeeds
         given()
@@ -153,11 +156,11 @@ class TokenEndpointTest {
     }
 
     @Test
-    void token_authCode_wrongRedirectUri_returnsInvalidRequest() {
+    void token_authCode_wrongRedirectUri_returnsInvalidGrant() {
         String code = "wrong-redirect-code";
-        cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", "user1", "http://localhost:8080/callback", List.of("openid")
-        ), 600);
+        awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
+            "test-client", "user1", "http://localhost:8080/callback", List.of("openid"), null, null, null
+        ), 600));
 
         given()
             .contentType(ContentType.URLENC)
@@ -170,15 +173,15 @@ class TokenEndpointTest {
             .post("/token")
         .then()
             .statusCode(400)
-            .body("error", equalTo("invalid_request"));
+            .body("error", equalTo("invalid_grant"));
     }
 
     @Test
     void token_authCode_withoutScope_usesCodeScopes() {
         String code = "default-scope-code";
-        cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", "user1", "http://localhost:8080/callback", List.of("openid", "email")
-        ), 600);
+        awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
+            "test-client", "user1", "http://localhost:8080/callback", List.of("openid", "email"), null, null, null
+        ), 600));
 
         given()
             .contentType(ContentType.URLENC)
@@ -223,9 +226,9 @@ class TokenEndpointTest {
     @Test
     void token_refreshToken_validToken_returnsTokens() {
         String refreshToken = "valid-refresh-token";
-        cacheService.saveRefreshToken(refreshToken, new RefreshTokenData(
+        awaitVoid(cacheService.saveRefreshToken(refreshToken, new RefreshTokenData(
             "user1", "test-client", List.of("openid")
-        ), 604800);
+        ), 604800));
 
         given()
             .contentType(ContentType.URLENC)
@@ -243,15 +246,15 @@ class TokenEndpointTest {
             .body("scope", equalTo("openid"));
 
         // Old refresh token should be deleted
-        assertNull(cacheService.getRefreshToken(refreshToken));
+        assertNull(await(cacheService.getRefreshToken(refreshToken)));
     }
 
     @Test
     void token_refreshToken_withScope_usesProvidedScope() {
         String refreshToken = "scope-refresh-token";
-        cacheService.saveRefreshToken(refreshToken, new RefreshTokenData(
+        awaitVoid(cacheService.saveRefreshToken(refreshToken, new RefreshTokenData(
             "user1", "test-client", List.of("openid")
-        ), 604800);
+        ), 604800));
 
         given()
             .contentType(ContentType.URLENC)
@@ -267,11 +270,206 @@ class TokenEndpointTest {
     }
 
     @Test
+    void token_authCode_invalidClientSecret_returnsInvalidClient() {
+        String code = "invalid-secret-code";
+        awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
+            "test-client", "user1", "http://localhost:8080/callback", List.of("openid"), null, null, null
+        ), 600));
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "authorization_code")
+            .formParam("code", code)
+            .formParam("redirect_uri", "http://localhost:8080/callback")
+            .formParam("client_id", "test-client")
+            .formParam("client_secret", "wrong-secret")
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(401)
+            .body("error", equalTo("invalid_client"));
+    }
+
+    @Test
+    void token_authCode_unknownClient_returnsInvalidClient() {
+        String code = "unknown-client-code";
+        awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
+            "test-client", "user1", "http://localhost:8080/callback", List.of("openid"), null, null, null
+        ), 600));
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "authorization_code")
+            .formParam("code", code)
+            .formParam("redirect_uri", "http://localhost:8080/callback")
+            .formParam("client_id", "unknown-client")
+            .formParam("client_secret", "secret")
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(401)
+            .body("error", equalTo("invalid_client"));
+    }
+
+    @Test
+    void token_authCode_wrongClientIdForCode_returnsInvalidGrant() {
+        String code = "mismatch-client-code";
+        awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
+            "other-client", "user1", "http://localhost:8080/callback", List.of("openid"), null, null, null
+        ), 600));
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "authorization_code")
+            .formParam("code", code)
+            .formParam("redirect_uri", "http://localhost:8080/callback")
+            .formParam("client_id", "test-client")
+            .formParam("client_secret", "secret")
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(400)
+            .body("error", equalTo("invalid_grant"));
+    }
+
+    @Test
+    void token_refreshToken_wrongClientId_returnsInvalidGrant() {
+        String refreshToken = "mismatch-refresh-token";
+        awaitVoid(cacheService.saveRefreshToken(refreshToken, new RefreshTokenData(
+            "user1", "other-client", List.of("openid")
+        ), 604800));
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "refresh_token")
+            .formParam("refresh_token", refreshToken)
+            .formParam("client_id", "test-client")
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(400)
+            .body("error", equalTo("invalid_grant"));
+    }
+
+    @Test
+    void token_refreshToken_unknownClient_returnsInvalidClient() {
+        String refreshToken = "unknown-client-refresh-token";
+        awaitVoid(cacheService.saveRefreshToken(refreshToken, new RefreshTokenData(
+            "user1", "test-client", List.of("openid")
+        ), 604800));
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "refresh_token")
+            .formParam("refresh_token", refreshToken)
+            .formParam("client_id", "unknown-client")
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(401)
+            .body("error", equalTo("invalid_client"));
+    }
+
+    private static final String PKCE_VERIFIER = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG";
+
+    @Test
+    void token_authCode_withPkce_validVerifier_returnsTokens() {
+        String code = "pkce-valid-code";
+        String challenge = PkceUtil.s256Challenge(PKCE_VERIFIER);
+        awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
+            "test-client", "user1", "http://localhost:8080/callback", List.of("openid"),
+            challenge, "S256", null
+        ), 600));
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "authorization_code")
+            .formParam("code", code)
+            .formParam("redirect_uri", "http://localhost:8080/callback")
+            .formParam("client_id", "test-client")
+            .formParam("client_secret", "secret")
+            .formParam("code_verifier", PKCE_VERIFIER)
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(200)
+            .body("access_token", notNullValue());
+    }
+
+    @Test
+    void token_authCode_withPkce_missingVerifier_returnsInvalidGrant() {
+        String code = "pkce-missing-verifier-code";
+        String challenge = PkceUtil.s256Challenge(PKCE_VERIFIER);
+        awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
+            "test-client", "user1", "http://localhost:8080/callback", List.of("openid"),
+            challenge, "S256", null
+        ), 600));
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "authorization_code")
+            .formParam("code", code)
+            .formParam("redirect_uri", "http://localhost:8080/callback")
+            .formParam("client_id", "test-client")
+            .formParam("client_secret", "secret")
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(400)
+            .body("error", equalTo("invalid_grant"));
+    }
+
+    @Test
+    void token_authCode_withPkce_wrongVerifier_returnsInvalidGrant() {
+        String code = "pkce-wrong-verifier-code";
+        String challenge = PkceUtil.s256Challenge(PKCE_VERIFIER);
+        awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
+            "test-client", "user1", "http://localhost:8080/callback", List.of("openid"),
+            challenge, "S256", null
+        ), 600));
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "authorization_code")
+            .formParam("code", code)
+            .formParam("redirect_uri", "http://localhost:8080/callback")
+            .formParam("client_id", "test-client")
+            .formParam("client_secret", "secret")
+            .formParam("code_verifier", "wrong-verifier")
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(400)
+            .body("error", equalTo("invalid_grant"));
+    }
+
+    @Test
+    void token_authCode_withoutPkce_doesNotRequireVerifier() {
+        String code = "no-pkce-code";
+        awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
+            "test-client", "user1", "http://localhost:8080/callback", List.of("openid"), null, null, null
+        ), 600));
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "authorization_code")
+            .formParam("code", code)
+            .formParam("redirect_uri", "http://localhost:8080/callback")
+            .formParam("client_id", "test-client")
+            .formParam("client_secret", "secret")
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(200)
+            .body("access_token", notNullValue());
+    }
+
+    @Test
     void token_authCode_tokensAreStoredInCache() {
         String code = "cache-storage-code";
-        cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", "user1", "http://localhost:8080/callback", List.of("openid")
-        ), 600);
+        awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
+            "test-client", "user1", "http://localhost:8080/callback", List.of("openid"), null, null, null
+        ), 600));
 
         String body = given()
             .contentType(ContentType.URLENC)
@@ -290,8 +488,8 @@ class TokenEndpointTest {
         String accessToken = io.restassured.path.json.JsonPath.from(body).getString("access_token");
         String refreshTokenVal = io.restassured.path.json.JsonPath.from(body).getString("refresh_token");
 
-        assertNotNull(cacheService.getAccessToken(accessToken));
-        assertNotNull(cacheService.getRefreshToken(refreshTokenVal));
+        assertNotNull(await(cacheService.getAccessToken(accessToken)));
+        assertNotNull(await(cacheService.getRefreshToken(refreshTokenVal)));
     }
 
     private void assertNull(Object obj) {
