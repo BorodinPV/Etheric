@@ -407,34 +407,103 @@ JSON на Token Endpoint / admin:
 
 ---
 
+## Production
+
+Запуск в production-режиме:
+
+```bash
+./mvnw package -DskipTests
+java -Dquarkus.profile=prod -jar target/quarkus-app/quarkus-run.jar
+```
+
+У packaged JAR профиль **`prod` включён по умолчанию** (если не задан `-Dquarkus.profile`).  
+Для dev используйте `./mvnw quarkus:dev` (профиль `%dev`).
+
+### Обязательные переменные окружения
+
+| Переменная | Свойство | Описание |
+|------------|----------|----------|
+| `ETHERIC_DB_USER` | `quarkus.datasource.username` | Пользователь PostgreSQL |
+| `ETHERIC_DB_PASSWORD` | `quarkus.datasource.password` | Пароль PostgreSQL (используйте сильный пароль) |
+| `ETHERIC_DB_REACTIVE_URL` | `quarkus.datasource.reactive.url` | Reactive URL PostgreSQL |
+| `ETHERIC_DB_JDBC_URL` | `quarkus.datasource.jdbc.url` | JDBC URL PostgreSQL (Flyway) |
+| `ETHERIC_REDIS_URL` | `quarkus.redis.hosts` | URL Redis |
+| `ETHERIC_ADMIN_API_KEY` | `etheric.admin.api-key` | Ключ Admin API (**не** оставляйте `change-me-admin-key`) |
+| `ETHERIC_JWT_ISSUER` | `etheric.jwt.issuer` | Claim `iss` в JWT (например `https://auth.example.com`) |
+
+### Опциональные переменные
+
+| Переменная | Свойство | По умолчанию | Описание |
+|------------|----------|--------------|----------|
+| `ETHERIC_CORS_ENABLED` | `quarkus.http.cors` | `false` | Включить CORS |
+| `ETHERIC_CORS_ORIGINS` | `quarkus.http.cors.origins` | *(пусто)* | Разрешённые origins через запятую |
+
+Пример `.env` — см. [`.env.example`](.env.example). **Не коммитьте `.env`.**
+
+### CORS для SPA-клиентов
+
+По умолчанию CORS **выключен**. Для SPA на другом origin (например `https://app.example.com`):
+
+```bash
+export ETHERIC_CORS_ENABLED=true
+export ETHERIC_CORS_ORIGINS=https://app.example.com
+```
+
+**Никогда** не используйте `origins=*` вместе с `access-control-allow-credentials=true`.  
+В профиле `%dev` CORS включён с явными localhost-origins (`8080`, `127.0.0.1:8080`, `3000`).
+
+При старте с `-Dquarkus.profile=prod` `ProductionConfigValidator` проверяет конфигурацию и **завершает процесс**, если:
+
+- admin API key равен `change-me-admin-key`;
+- CORS включён, а origins пусты или содержат `*`.
+
+`DevSeedService` **не выполняется** в production — клиентов и пользователей регистрируйте через Admin API или миграции.
+
+### Чеклист перед деплоем
+
+- [ ] Задать `ETHERIC_ADMIN_API_KEY` (длинный случайный секрет)
+- [ ] Задать сильный `ETHERIC_DB_PASSWORD`
+- [ ] Настроить `ETHERIC_JWT_ISSUER` на публичный URL authorization server
+- [ ] Развернуть за **HTTPS**; `etheric.session.cookie.secure=true` (по умолчанию)
+- [ ] Настроить CORS только при необходимости, с явными origins
+- [ ] Убедиться, что dev seed не активен (профиль `prod`, без `@IfBuildProfile dev/test`)
+- [ ] Хранить секреты в secret manager / env, не в репозитории
+
+---
+
 ## Конфигурация
 
 Ключевые свойства в `src/main/resources/application.properties`:
 
-| Свойство | Описание | По умолчанию |
-|----------|----------|--------------|
-| `etheric.admin.api-key` | Ключ Admin API | `change-me-admin-key` |
-| `etheric.session.cookie.secure` | Флаг Secure у cookie `SESSIONID` | `true` |
-| `etheric.jwt.access-token-lifetime` | TTL access-токена (с) | `3600` |
-| `etheric.jwt.refresh-token-lifetime` | TTL refresh-токена (с) | `604800` |
-| `etheric.jwt.authorization-code-lifetime` | TTL auth code (с) | `600` |
-| `etheric.jwt.session-lifetime` | TTL сессии (с) | `28800` |
-| `etheric.jwt.request-state-lifetime` | TTL `auth:request:{state}` (с) | `600` |
-| `etheric.jwt.issuer` | Claim `iss` в JWT | `etheric` |
-| `etheric.jwt.algorithm` | Алгоритм подписи JWT (JWKS `alg`) | `RS256` |
-| `etheric.jwt.private-key-location` | Путь к PEM приватного ключа | `keys/private.pem` |
-| `etheric.jwt.public-key-location` | Путь к PEM публичного ключа | `keys/public.pem` |
-| `etheric.rate-limit.enabled` | Включить rate limiting | `true` |
-| `etheric.rate-limit.window-seconds` | Окно rate limit (с) | `60` |
-| `etheric.rate-limit.authorize-max` | Макс. запросов `/authorize` за окно | `60` |
-| `etheric.rate-limit.login-max` | Макс. запросов `/login` за окно | `20` |
-| `etheric.rate-limit.token-max` | Макс. запросов `/token` за окно | `30` |
-| `etheric.rate-limit.consent-max` | Макс. POST `/consent` за окно | `20` |
-| `etheric.cache.client-ttl-seconds` | TTL локального кэша клиентов (Caffeine) | `60` |
-| `etheric.cache.consent-ttl-seconds` | TTL remember-consent (с) | `2592000` (30 дней) |
-| `quarkus.datasource.*` | PostgreSQL (клиенты, пользователи) | см. файл |
-| `quarkus.redis.hosts` | Redis (сессии, коды, токены) | `redis://localhost:6379` |
-| `quarkus.shutdown.timeout` | Graceful shutdown — ожидание завершения HTTP-запросов | `PT30S` |
+| Свойство | Env var | Описание | По умолчанию |
+|----------|---------|----------|--------------|
+| `etheric.admin.api-key` | `ETHERIC_ADMIN_API_KEY` | Ключ Admin API | `change-me-admin-key` |
+| `etheric.session.cookie.secure` | — | Флаг Secure у cookie `SESSIONID` | `true` |
+| `etheric.jwt.access-token-lifetime` | — | TTL access-токена (с) | `3600` |
+| `etheric.jwt.refresh-token-lifetime` | — | TTL refresh-токена (с) | `604800` |
+| `etheric.jwt.authorization-code-lifetime` | — | TTL auth code (с) | `600` |
+| `etheric.jwt.session-lifetime` | — | TTL сессии (с) | `28800` |
+| `etheric.jwt.request-state-lifetime` | — | TTL `auth:request:{state}` (с) | `600` |
+| `etheric.jwt.issuer` | `ETHERIC_JWT_ISSUER` | Claim `iss` в JWT | `etheric` |
+| `etheric.jwt.algorithm` | — | Алгоритм подписи JWT (JWKS `alg`) | `RS256` |
+| `etheric.jwt.private-key-location` | — | Путь к PEM приватного ключа | `keys/private.pem` |
+| `etheric.jwt.public-key-location` | — | Путь к PEM публичного ключа | `keys/public.pem` |
+| `etheric.rate-limit.enabled` | — | Включить rate limiting | `true` |
+| `etheric.rate-limit.window-seconds` | — | Окно rate limit (с) | `60` |
+| `etheric.rate-limit.authorize-max` | — | Макс. запросов `/authorize` за окно | `60` |
+| `etheric.rate-limit.login-max` | — | Макс. запросов `/login` за окно | `20` |
+| `etheric.rate-limit.token-max` | — | Макс. запросов `/token` за окно | `30` |
+| `etheric.rate-limit.consent-max` | — | Макс. POST `/consent` за окно | `20` |
+| `etheric.cache.client-ttl-seconds` | — | TTL локального кэша клиентов (Caffeine) | `60` |
+| `etheric.cache.consent-ttl-seconds` | — | TTL remember-consent (с) | `2592000` (30 дней) |
+| `quarkus.datasource.username` | `ETHERIC_DB_USER` | PostgreSQL user | `etheric` |
+| `quarkus.datasource.password` | `ETHERIC_DB_PASSWORD` | PostgreSQL password | `etheric` |
+| `quarkus.datasource.reactive.url` | `ETHERIC_DB_REACTIVE_URL` | Reactive PostgreSQL URL | `postgresql://localhost:5432/etheric` |
+| `quarkus.datasource.jdbc.url` | `ETHERIC_DB_JDBC_URL` | JDBC PostgreSQL URL | `jdbc:postgresql://localhost:5432/etheric` |
+| `quarkus.redis.hosts` | `ETHERIC_REDIS_URL` | Redis URL | `redis://localhost:6379` |
+| `quarkus.http.cors` | `ETHERIC_CORS_ENABLED` | CORS | `false` |
+| `quarkus.http.cors.origins` | `ETHERIC_CORS_ORIGINS` | Allowed origins (comma-separated) | *(пусто)* |
+| `quarkus.shutdown.timeout` | — | Graceful shutdown — ожидание завершения HTTP-запросов | `PT30S` |
 
 Архитектурный документ: [`docs/Etheric.md`](docs/Etheric.md).
 

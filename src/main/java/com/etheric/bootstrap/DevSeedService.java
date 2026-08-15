@@ -5,6 +5,7 @@ import com.etheric.entity.User;
 import com.etheric.repository.ClientRepository;
 import com.etheric.repository.UserRepository;
 import com.etheric.service.PasswordService;
+import io.quarkus.arc.profile.IfBuildProfile;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.vertx.VertxContextSupport;
@@ -22,6 +23,7 @@ import java.util.UUID;
  * Seeds dev/test data when PostgreSQL tables are empty (after Flyway).
  */
 @ApplicationScoped
+@IfBuildProfile(anyOf = {"dev", "test"})
 public class DevSeedService {
 
     private static final Logger LOG = Logger.getLogger(DevSeedService.class);

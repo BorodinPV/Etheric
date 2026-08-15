@@ -53,10 +53,14 @@
 - CSRF на login/consent, валидация `redirect_uri`, ротация refresh-токенов
 - Dev seed, Flyway-миграции, graceful shutdown (`quarkus.shutdown.timeout`)
 - HTML-шаблоны login/consent/error (Qute), маскирование секретов в логах, CORS
+- **Production env-based config** — `ETHERIC_*` переменные окружения для PostgreSQL, Redis, Admin API, JWT issuer, CORS
+- **Production startup validation** — `ProductionConfigValidator` (профиль `prod`): блокирует дефолтный admin key и небезопасный CORS
+- **Dev seed отключён в prod** — `DevSeedService` только в профилях `dev` / `test`
 
 ### Отложено (DEFERRED)
 
 - **Целевые метрики производительности** (§8.1) — benchmarks QPS/P99 не реализованы
+- **Production ops checklist** (HTTPS termination, secret rotation, monitoring) — документировано в README §Production; автоматизация деплоя не входит в scope
 
 ---
 
