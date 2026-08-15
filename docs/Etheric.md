@@ -34,27 +34,29 @@
 ### Реализовано
 
 - Authorization Code Flow: `/authorize`, `/login`, `/consent`, `/token`, `/logout`
-- Хранение: PostgreSQL (клиенты, пользователи) + Redis (сессии, коды, токены, request state)
+- **OpenID Connect**: выдача `id_token` при scope `openid` (authorization_code + refresh_token)
+- **Token Introspection** (RFC 7662): `POST /introspect`
+- **Token Revocation** (RFC 7009): `POST /revoke`
+- **Basic Auth** на `/token`, `/introspect`, `/revoke` (альтернатива form-параметрам)
+- **Rate limiting** (Redis) для `/authorize`, `/login`, `/token`, `/consent` (POST)
+- **Пропуск consent** («remember consent») — Redis `auth:consent:{userId}:{clientId}`
+- **Резервное хранение auth code в PostgreSQL** — таблица `authorization_codes` (Flyway V2)
+- **Страница `/error`** — Qute-шаблон `templates/error.html`
+- **Retry при ошибках Redis** — до 3 попыток с backoff в `CacheService`
+- **Локальный кэш Caffeine** перед PostgreSQL для `ClientRepository.findByClientId`
+- **Native/AOT профиль** — `mvn package -Dnative` (требует GraalVM)
+- Хранение: PostgreSQL (клиенты, пользователи, auth codes backup) + Redis (сессии, коды, токены, request state)
 - PKCE (S256 и plain) на `/authorize` и `/token`
 - Admin API: регистрация и просмотр клиентов (`/admin/clients`)
 - JWT access/refresh-токены, JWKS (`/.well-known/jwks.json`), алгоритм из `etheric.jwt.algorithm`
 - Health checks: `/health/live`, `/health/ready` (PostgreSQL, Redis)
 - CSRF на login/consent, валидация `redirect_uri`, ротация refresh-токенов
 - Dev seed, Flyway-миграции, graceful shutdown (`quarkus.shutdown.timeout`)
-- HTML-шаблоны login/consent (Qute), маскирование секретов в логах, CORS
+- HTML-шаблоны login/consent/error (Qute), маскирование секретов в логах, CORS
 
 ### Отложено (DEFERRED)
 
-- **OpenID Connect / `id_token`** — метод генерации id_token есть, но не подключён к потоку
-- **Резервное хранение auth code в PostgreSQL** — таблица `authorization_codes` не создана
-- **Страница `/error`** — шаблон `templates/error.html` существует, эндпоинт не подключён
-- **Basic Auth на `/token`** — только form-параметры `client_id` / `client_secret`
-- **Retry/fallback при ошибках Redis** — ошибки соединения не перехватываются с повторами
-- **Rate limiting** — не реализован
-- **Token introspection / revocation** (RFC 7662 / RFC 7009)
-- **Пропуск consent** для повторных авторизаций («remember consent»)
-- **Native/AOT и целевые метрики производительности** (§8.1)
-- **Локальный кэш Caffeine** перед Redis
+- **Целевые метрики производительности** (§8.1) — benchmarks QPS/P99 не реализованы
 
 ---
 
@@ -399,6 +401,14 @@
 - **Задержка:** Время ответа на 99-й процентиль (P99) не должно превышать 50 мс.
 - **Время старта:** В нативном режиме (GraalVM) — менее 50 мс; в JVM-режиме — около 1 секунды.
 - **Потребление памяти:** В нативном режиме — менее 100 МБ; в JVM-режиме — около 200 МБ.
+
+**Сборка native-образа** (требует GraalVM):
+
+```bash
+./mvnw package -Dnative
+```
+
+Профиль `native` активируется свойством `-Dnative` (см. `pom.xml`). Бинарник: `target/Etheric-1.0-SNAPSHOT-runner`.
 
 ### 8.2. Масштабирование
 

@@ -1,32 +1,26 @@
 package com.etheric.endpoint;
 
 import com.etheric.config.EthericTtlConfig;
-import com.etheric.model.AuthorizationCodeData;
-import com.etheric.repository.ClientRepository;
+import com.etheric.model.ConsentData;
+import com.etheric.model.SessionData;
+import com.etheric.repository.UserRepository;
 import com.etheric.service.CacheService;
-import com.etheric.service.JwtService;
 import com.etheric.util.OAuthRedirectBuilder;
+import com.etheric.util.ScopeUtil;
 import com.etheric.util.SessionCookieFactory;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.HttpHeaders;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.*;
 
+import java.net.URI;
 import java.util.Map;
 import java.util.UUID;
 
 /**
  * Consent screen for the authorization flow ({@code GET|POST /consent}).
- * <p>
- * GET: {@code state} query param; returns HTML consent page (requires session).
- * POST form: {@code action=approve|deny}, {@code state}, {@code csrf_token}.
- * Approve: {@code 302} redirect to client {@code redirect_uri} with authorization {@code code}.
- * Deny: {@code 302} with {@code error=access_denied}. Invalid session/state: {@code 400}/{@code 403}.
  */
 @Path("/consent")
 public class ConsentEndpoint {
@@ -35,13 +29,16 @@ public class ConsentEndpoint {
     Template consent;
 
     @Inject
-    ClientRepository clientRepository;
+    com.etheric.repository.ClientRepository clientRepository;
 
     @Inject
     CacheService cacheService;
 
     @Inject
-    JwtService jwtService;
+    com.etheric.service.AuthorizationCodeService authorizationCodeService;
+
+    @Inject
+    com.etheric.config.EthericCacheConfig cacheConfig;
 
     @Inject
     EthericTtlConfig ttlConfig;
@@ -123,17 +120,12 @@ public class ConsentEndpoint {
         });
     }
 
-    private Uni<Response> handleApprove(com.etheric.model.SessionData session,
+    private Uni<Response> handleApprove(SessionData session,
                                         com.etheric.model.AuthorizationRequestState requestState, String state) {
-        String code = jwtService.generateAuthorizationCode();
-        return cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-                        requestState.getClientId(), session.getUserId(), requestState.getRedirectUri(),
-                        requestState.getScope(), requestState.getCodeChallenge(),
-                        requestState.getCodeChallengeMethod(), requestState.getNonce()),
-                ttlConfig.authorizationCodeLifetime())
-                .flatMap(v -> cacheService.deleteAuthorizationRequestState(state))
-                .replaceWith(Response.seeOther(OAuthRedirectBuilder.authorizationSuccess(
-                        requestState.getRedirectUri(), code, requestState.getState())).build());
+        ConsentData consent = new ConsentData(requestState.getScope(), System.currentTimeMillis());
+        return cacheService.saveConsent(session.getUserId(), requestState.getClientId(), consent,
+                        cacheConfig.consentTtlSeconds())
+                .flatMap(v -> authorizationCodeService.issueCodeAndRedirect(session.getUserId(), requestState, state));
     }
 
     private Uni<Response> handleDeny(com.etheric.model.AuthorizationRequestState requestState, String state) {

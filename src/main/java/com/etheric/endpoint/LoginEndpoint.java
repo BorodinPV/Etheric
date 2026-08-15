@@ -5,6 +5,7 @@ import com.etheric.model.SessionData;
 import com.etheric.repository.UserRepository;
 import com.etheric.service.CacheService;
 import com.etheric.util.OAuthRedirectBuilder;
+import com.etheric.util.ScopeUtil;
 import com.etheric.util.SessionCookieFactory;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
@@ -19,11 +20,6 @@ import java.util.UUID;
 
 /**
  * Login page for the authorization flow ({@code GET|POST /login}).
- * <p>
- * GET: optional {@code state} query param; returns HTML form, sets {@code SESSIONID} cookie.
- * POST form: {@code username}, {@code password}, {@code state}, {@code csrf_token}.
- * Success: {@code 302} to {@code /consent} (or {@code /} without state).
- * Errors: {@code 403} on invalid CSRF; HTML page with message on bad credentials.
  */
 @Path("/login")
 public class LoginEndpoint {
@@ -118,13 +114,30 @@ public class LoginEndpoint {
                                 ttlConfig.requestStateLifetime()).replaceWithVoid();
                     });
                 })
-                .replaceWith(buildLoginRedirect(newSessionId, state));
+                .flatMap(v -> resolvePostLoginRedirect(newSessionId, userId, state));
     }
 
-    private Response buildLoginRedirect(String newSessionId, String state) {
+    private Uni<Response> resolvePostLoginRedirect(String newSessionId, String userId, String state) {
+        if (state == null) {
+            return Uni.createFrom().item(buildLoginRedirect(newSessionId, null, "/"));
+        }
+        return cacheService.getAuthorizationRequestState(state).flatMap(requestState -> {
+            if (requestState == null) {
+                return Uni.createFrom().item(buildLoginRedirect(newSessionId, state, "/consent"));
+            }
+            return cacheService.getConsent(userId, requestState.getClientId()).map(consent -> {
+                String target = (consent != null && ScopeUtil.coversScopes(consent.getScopes(), requestState.getScope()))
+                        ? "/authorize"
+                        : "/consent";
+                return buildLoginRedirect(newSessionId, state, target);
+            });
+        });
+    }
+
+    private Response buildLoginRedirect(String newSessionId, String state, String targetPath) {
         URI redirectUri = state != null
-                ? OAuthRedirectBuilder.build("/consent", Map.of("state", state))
-                : URI.create("/");
+                ? OAuthRedirectBuilder.build(targetPath, Map.of("state", state))
+                : URI.create(targetPath);
         return Response.seeOther(redirectUri)
                 .header("Set-Cookie", sessionCookieFactory.create(newSessionId))
                 .build();

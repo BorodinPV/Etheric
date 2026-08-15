@@ -1,6 +1,8 @@
 package com.etheric.repository;
 
 import com.etheric.entity.Client;
+import io.quarkus.cache.CacheInvalidateAll;
+import io.quarkus.cache.CacheResult;
 import io.quarkus.hibernate.reactive.panache.PanacheRepository;
 import io.quarkus.hibernate.reactive.panache.common.WithSession;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
@@ -15,6 +17,7 @@ import java.util.Optional;
 public class ClientRepository implements PanacheRepository<Client> {
 
     @WithSession
+    @CacheResult(cacheName = "clients")
     public Uni<Optional<Client>> findByClientId(String clientId) {
         return find("clientId", clientId).firstResult().map(Optional::ofNullable);
     }
@@ -67,6 +70,7 @@ public class ClientRepository implements PanacheRepository<Client> {
     }
 
     @WithTransaction
+    @CacheInvalidateAll(cacheName = "clients")
     public Uni<Client> persistClient(Client client) {
         return persist(client).replaceWith(client);
     }

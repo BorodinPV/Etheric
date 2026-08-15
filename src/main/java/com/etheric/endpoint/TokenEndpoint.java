@@ -10,27 +10,24 @@ import com.etheric.model.RefreshTokenData;
 import com.etheric.model.TokenResponse;
 import com.etheric.repository.ClientRepository;
 import com.etheric.repository.UserRepository;
+import com.etheric.service.AuthorizationCodeService;
 import com.etheric.service.CacheService;
+import com.etheric.service.ClientAuthService;
 import com.etheric.service.JwtService;
-import com.etheric.service.PasswordService;
 import com.etheric.util.PkceUtil;
+import com.etheric.util.ScopeUtil;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-
 import java.util.List;
 import java.util.UUID;
 
 /**
  * OAuth 2.0 Token Endpoint ({@code POST /token}).
- * <p>
- * Form params: {@code grant_type} ({@code authorization_code} or {@code refresh_token}), plus
- * grant-specific fields ({@code code}, {@code redirect_uri}, {@code client_id}, {@code client_secret},
- * {@code code_verifier}, {@code refresh_token}, {@code scope}).
- * Success: {@code 200} JSON with {@code access_token}, {@code refresh_token}, {@code expires_in}.
- * Errors: JSON {@code 400} (OAuth errors) or {@code 401} ({@code invalid_client}).
  */
 @Path("/token")
 public class TokenEndpoint {
@@ -48,7 +45,10 @@ public class TokenEndpoint {
     UserRepository userRepository;
 
     @Inject
-    PasswordService passwordService;
+    ClientAuthService clientAuthService;
+
+    @Inject
+    AuthorizationCodeService authorizationCodeService;
 
     @Inject
     EthericTtlConfig ttlConfig;
@@ -64,7 +64,8 @@ public class TokenEndpoint {
             @FormParam("client_secret") String clientSecret,
             @FormParam("code_verifier") String codeVerifier,
             @FormParam("refresh_token") String refreshToken,
-            @FormParam("scope") List<String> scope) {
+            @FormParam("scope") List<String> scope,
+            @Context HttpHeaders headers) {
 
         if (grantType == null) {
             throw new OAuthException(OAuthError.INVALID_REQUEST, null, null);
@@ -72,36 +73,40 @@ public class TokenEndpoint {
 
         return switch (grantType) {
             case "authorization_code" ->
-                    handleAuthorizationCode(code, redirectUri, clientId, clientSecret, codeVerifier, scope);
+                    handleAuthorizationCode(code, redirectUri, clientId, clientSecret, codeVerifier, scope, headers);
             case "refresh_token" ->
-                    handleRefreshToken(refreshToken, clientId, clientSecret, scope);
+                    handleRefreshToken(refreshToken, clientId, clientSecret, scope, headers);
             default -> Uni.createFrom().failure(new OAuthException(OAuthError.UNSUPPORTED_GRANT_TYPE, null, null));
         };
     }
 
     private Uni<Response> handleAuthorizationCode(String code, String redirectUri, String clientId,
-                                                   String clientSecret, String codeVerifier, List<String> scope) {
-        if (code == null || redirectUri == null || clientId == null || clientSecret == null) {
+                                                   String clientSecret, String codeVerifier,
+                                                   List<String> scope, HttpHeaders headers) {
+        ClientAuthService.ClientCredentials creds =
+                clientAuthService.resolveCredentials(clientId, clientSecret, headers);
+        if (code == null || redirectUri == null || creds.clientId() == null) {
             throw new OAuthException(OAuthError.INVALID_REQUEST, null, null);
         }
+        String resolvedClientId = creds.clientId();
 
-        return authenticateClient(clientId, clientSecret)
-                .flatMap(client -> clientRepository.isGrantTypeSupported(clientId, "authorization_code"))
+        return clientAuthService.authenticateRequired(clientId, clientSecret, headers)
+                .flatMap(client -> clientRepository.isGrantTypeSupported(resolvedClientId, "authorization_code"))
                 .flatMap(supported -> {
                     if (!supported) {
                         return Uni.createFrom().failure(new OAuthException(OAuthError.UNAUTHORIZED_CLIENT, null, null));
                     }
                     return cacheService.getAuthorizationCode(code);
                 })
-                .flatMap(codeData -> validateAuthorizationCode(codeData, code, redirectUri, clientId, codeVerifier))
-                .flatMap(codeData -> cacheService.deleteAuthorizationCode(code).replaceWith(codeData))
+                .flatMap(codeData -> validateAuthorizationCode(codeData, redirectUri, resolvedClientId, codeVerifier))
                 .flatMap(codeData -> {
-                    List<String> grantedScopes = scope != null && !scope.isEmpty() ? scope : codeData.getScopes();
-                    return issueTokenResponse(codeData.getUserId(), clientId, grantedScopes);
+                    List<String> grantedScopes = ScopeUtil.resolveGrantedScopes(scope, codeData.getScopes());
+                    return issueTokenResponse(codeData.getUserId(), resolvedClientId, grantedScopes, codeData.getNonce())
+                            .flatMap(response -> authorizationCodeService.markCodeUsed(code).replaceWith(response));
                 });
     }
 
-    private Uni<AuthorizationCodeData> validateAuthorizationCode(AuthorizationCodeData codeData, String code,
+    private Uni<AuthorizationCodeData> validateAuthorizationCode(AuthorizationCodeData codeData,
                                                                    String redirectUri, String clientId,
                                                                    String codeVerifier) {
         if (codeData == null) {
@@ -120,22 +125,17 @@ public class TokenEndpoint {
     }
 
     private Uni<Response> handleRefreshToken(String refreshToken, String clientId,
-                                             String clientSecret, List<String> scope) {
-        if (refreshToken == null || clientId == null) {
+                                             String clientSecret, List<String> scope,
+                                             HttpHeaders headers) {
+        ClientAuthService.ClientCredentials creds =
+                clientAuthService.resolveCredentials(clientId, clientSecret, headers);
+        if (refreshToken == null || creds.clientId() == null) {
             throw new OAuthException(OAuthError.INVALID_REQUEST, null, null);
         }
+        String resolvedClientId = creds.clientId();
 
-        Uni<Client> authUni = clientSecret != null && !clientSecret.isBlank()
-                ? authenticateClient(clientId, clientSecret)
-                : clientRepository.findByClientId(clientId).flatMap(opt -> {
-                    if (opt.isEmpty() || !opt.get().enabled) {
-                        return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_CLIENT, 401));
-                    }
-                    return Uni.createFrom().item(opt.get());
-                });
-
-        return authUni
-                .flatMap(client -> clientRepository.isGrantTypeSupported(clientId, "refresh_token"))
+        return clientAuthService.authenticateOptionalSecret(clientId, clientSecret, headers)
+                .flatMap(client -> clientRepository.isGrantTypeSupported(resolvedClientId, "refresh_token"))
                 .flatMap(supported -> {
                     if (!supported) {
                         return Uni.createFrom().failure(new OAuthException(OAuthError.UNAUTHORIZED_CLIENT, null, null));
@@ -146,31 +146,51 @@ public class TokenEndpoint {
                     if (refreshTokenData == null) {
                         return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_GRANT, null, null));
                     }
-                    if (!clientId.equals(refreshTokenData.getClientId())) {
+                    if (!resolvedClientId.equals(refreshTokenData.getClientId())) {
                         return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_GRANT, null, null));
                     }
-                    List<String> grantedScopes = scope != null && !scope.isEmpty() ? scope : refreshTokenData.getScopes();
+                    List<String> grantedScopes = ScopeUtil.resolveGrantedScopes(scope, refreshTokenData.getScopes());
                     return cacheService.deleteRefreshToken(refreshToken)
-                            .flatMap(v -> issueTokenResponse(refreshTokenData.getUserId(), clientId, grantedScopes));
+                            .flatMap(v -> issueTokenResponse(refreshTokenData.getUserId(), resolvedClientId, grantedScopes, null));
                 });
     }
 
-    private Uni<Response> issueTokenResponse(String userId, String clientId, List<String> grantedScopes) {
+    private Uni<Response> issueTokenResponse(String userId, String clientId,
+                                             List<String> grantedScopes, String nonce) {
         long accessTtl = ttlConfig.accessTokenLifetime();
         long refreshTtl = ttlConfig.refreshTokenLifetime();
+        boolean includeIdToken = grantedScopes.contains("openid");
 
         return resolveRoles(userId).flatMap(roles -> {
             String accessToken = jwtService.generateAccessToken(userId, roles, grantedScopes);
             String refreshToken = jwtService.generateRefreshToken(userId, roles, grantedScopes);
 
-            return cacheService.saveAccessToken(accessToken, new AccessTokenData(
-                            userId, clientId, grantedScopes, System.currentTimeMillis() / 1000 + accessTtl), accessTtl)
-                    .flatMap(v -> cacheService.saveRefreshToken(refreshToken,
-                            new RefreshTokenData(userId, clientId, grantedScopes), refreshTtl))
-                    .replaceWith(Response.ok(new TokenResponse(
-                            accessToken, "Bearer", accessTtl, refreshToken,
-                            String.join(" ", grantedScopes), null)).build());
+            Uni<String> idTokenUni = includeIdToken
+                    ? resolveIdToken(userId, clientId, nonce, grantedScopes)
+                    : Uni.createFrom().nullItem();
+
+            return idTokenUni.flatMap(idToken ->
+                    cacheService.saveAccessToken(accessToken, new AccessTokenData(
+                                    userId, clientId, grantedScopes, System.currentTimeMillis() / 1000 + accessTtl), accessTtl)
+                            .flatMap(v -> cacheService.saveRefreshToken(refreshToken,
+                                    new RefreshTokenData(userId, clientId, grantedScopes), refreshTtl))
+                            .replaceWith(Response.ok(new TokenResponse(
+                                    accessToken, "Bearer", accessTtl, refreshToken,
+                                    String.join(" ", grantedScopes), idToken)).build()));
         });
+    }
+
+    private Uni<String> resolveIdToken(String userId, String clientId, String nonce, List<String> scopes) {
+        try {
+            UUID userUuid = UUID.fromString(userId);
+            return userRepository.findUserById(userUuid)
+                    .map(opt -> jwtService.generateIdToken(
+                            userId, clientId, nonce, scopes,
+                            opt.map(u -> u.email).orElse(null),
+                            opt.map(u -> u.username).orElse(null)));
+        } catch (IllegalArgumentException e) {
+            return Uni.createFrom().item(jwtService.generateIdToken(userId, clientId, nonce, scopes, null, null));
+        }
     }
 
     private Uni<List<String>> resolveRoles(String userId) {
@@ -181,18 +201,5 @@ public class TokenEndpoint {
         } catch (IllegalArgumentException e) {
             return Uni.createFrom().item(List.of("user"));
         }
-    }
-
-    private Uni<Client> authenticateClient(String clientId, String clientSecret) {
-        return clientRepository.findByClientId(clientId).flatMap(opt -> {
-            if (opt.isEmpty() || !opt.get().enabled) {
-                return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_CLIENT, 401));
-            }
-            Client client = opt.get();
-            if (!passwordService.verifyPassword(clientSecret, client.clientSecretHash)) {
-                return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_CLIENT, 401));
-            }
-            return Uni.createFrom().item(client);
-        });
     }
 }

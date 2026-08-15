@@ -5,12 +5,15 @@ import com.etheric.util.SecretMasker;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.redis.datasource.ReactiveRedisDataSource;
+import io.quarkus.redis.datasource.keys.ReactiveKeyCommands;
 import io.quarkus.redis.datasource.value.ReactiveValueCommands;
 import io.smallrye.mutiny.Uni;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
+
+import java.time.Duration;
 
 /**
  * Redis-backed cache for OAuth artifacts (codes, tokens, sessions).
@@ -19,6 +22,9 @@ import org.jboss.logging.Logger;
 public class CacheService {
 
     private static final Logger LOG = Logger.getLogger(CacheService.class);
+    private static final int MAX_RETRIES = 3;
+    private static final Duration INITIAL_BACKOFF = Duration.ofMillis(50);
+    private static final Duration MAX_BACKOFF = Duration.ofMillis(200);
 
     @Inject
     ReactiveRedisDataSource redis;
@@ -27,10 +33,12 @@ public class CacheService {
     ObjectMapper objectMapper;
 
     private ReactiveValueCommands<String, String> values;
+    private ReactiveKeyCommands<String> keys;
 
     @PostConstruct
     void init() {
         values = redis.value(String.class);
+        keys = redis.key(String.class);
     }
 
     public Uni<Void> saveAuthorizationCode(String code, AuthorizationCodeData data, long ttlSeconds) {
@@ -93,22 +101,49 @@ public class CacheService {
         return delete("auth:request:" + state);
     }
 
+    public Uni<Void> saveConsent(String userId, String clientId, ConsentData data, long ttlSeconds) {
+        return set("auth:consent:" + userId + ":" + clientId, data, ttlSeconds);
+    }
+
+    public Uni<ConsentData> getConsent(String userId, String clientId) {
+        return get("auth:consent:" + userId + ":" + clientId, ConsentData.class);
+    }
+
+    public Uni<Void> deleteConsent(String userId, String clientId) {
+        return delete("auth:consent:" + userId + ":" + clientId);
+    }
+
     public Uni<Boolean> exists(String key) {
-        return values.get(key).map(value -> value != null);
+        return withRetry(values.get(key).map(value -> value != null), "exists");
+    }
+
+    public Uni<Boolean> checkRateLimit(String bucket, int maxRequests, long windowSeconds) {
+        String key = "rate:" + bucket;
+        return withRetry(values.incr(key), "rateLimit.incr")
+                .flatMap(count -> {
+                    if (count == 1) {
+                        return withRetry(keys.expire(key, Duration.ofSeconds(windowSeconds)), "rateLimit.expire")
+                                .replaceWith(count);
+                    }
+                    return Uni.createFrom().item(count);
+                })
+                .map(count -> count <= maxRequests)
+                .onFailure().invoke(e -> LOG.errorf("Rate limit check failed for bucket %s: %s", bucket, e.getMessage()))
+                .onFailure().recoverWithItem(true);
     }
 
     private Uni<Void> set(String key, Object value, long ttlSeconds) {
         try {
             String json = objectMapper.writeValueAsString(value);
             LOG.debugf("Caching key: %s, ttl: %ds", SecretMasker.maskCacheKey(key), ttlSeconds);
-            return values.setex(key, ttlSeconds, json).replaceWithVoid();
+            return withRetry(values.setex(key, ttlSeconds, json), "set:" + key).replaceWithVoid();
         } catch (JsonProcessingException e) {
             return Uni.createFrom().failure(new IllegalStateException("Failed to serialize cache value", e));
         }
     }
 
     private <T> Uni<T> get(String key, Class<T> type) {
-        return values.get(key).flatMap(json -> {
+        return withRetry(values.get(key), "get:" + key).flatMap(json -> {
             if (json == null) {
                 return Uni.createFrom().nullItem();
             }
@@ -122,6 +157,15 @@ public class CacheService {
 
     private Uni<Void> delete(String key) {
         LOG.debugf("Deleted cache key: %s", SecretMasker.maskCacheKey(key));
-        return values.getdel(key).replaceWithVoid();
+        return withRetry(values.getdel(key), "delete:" + key).replaceWithVoid();
+    }
+
+    private <T> Uni<T> withRetry(Uni<T> operation, String operationName) {
+        return operation.onFailure().retry()
+                .withBackOff(INITIAL_BACKOFF, MAX_BACKOFF)
+                .atMost(MAX_RETRIES)
+                .onFailure().invoke(e -> LOG.errorf(
+                        "Redis operation '%s' failed after %d attempts: %s",
+                        operationName, MAX_RETRIES, e.getMessage()));
     }
 }

@@ -1,13 +1,16 @@
 package com.etheric.endpoint;
 
+import com.etheric.config.EthericCacheConfig;
 import com.etheric.config.EthericTtlConfig;
 import com.etheric.exception.OAuthError;
 import com.etheric.exception.OAuthException;
 import com.etheric.model.AuthorizationRequestState;
 import com.etheric.repository.ClientRepository;
+import com.etheric.service.AuthorizationCodeService;
 import com.etheric.service.CacheService;
 import com.etheric.util.OAuthRedirectBuilder;
 import com.etheric.util.PkceUtil;
+import com.etheric.util.ScopeUtil;
 import com.etheric.util.SessionCookieFactory;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
@@ -24,12 +27,6 @@ import java.util.Map;
 
 /**
  * OAuth 2.0 Authorization Endpoint ({@code GET /authorize}).
- * <p>
- * Query params: {@code response_type=code}, {@code client_id}, {@code redirect_uri}, {@code state}
- * (required); optional {@code scope}, {@code code_challenge}, {@code code_challenge_method}, {@code nonce}.
- * Success: {@code 302} redirect to {@code /login} or {@code /consent}.
- * Errors with a valid {@code redirect_uri}: {@code 302} to client with {@code error} query params;
- * without {@code redirect_uri}: JSON {@code 400} ({@code invalid_request}, etc.).
  */
 @Path("/authorize")
 public class AuthorizationEndpoint {
@@ -43,7 +40,13 @@ public class AuthorizationEndpoint {
     CacheService cacheService;
 
     @Inject
+    AuthorizationCodeService authorizationCodeService;
+
+    @Inject
     EthericTtlConfig ttlConfig;
+
+    @Inject
+    EthericCacheConfig cacheConfig;
 
     @GET
     public Uni<Response> authorize(
@@ -91,7 +94,7 @@ public class AuthorizationEndpoint {
             return cacheService.saveAuthorizationRequestState(state, requestState, ttlConfig.requestStateLifetime())
                     .replaceWith(requestState);
         }).flatMap(savedState -> enrichWithSession(savedState, state, headers))
-                .map(enriched -> redirectForUser(enriched, state));
+                .flatMap(enriched -> redirectForUser(enriched, state));
     }
 
     private String resolvePkceMethod(String codeChallenge, String codeChallengeMethod,
@@ -126,10 +129,19 @@ public class AuthorizationEndpoint {
         });
     }
 
-    private Response redirectForUser(AuthorizationRequestState requestState, String state) {
+    private Uni<Response> redirectForUser(AuthorizationRequestState requestState, String state) {
         if (requestState.getUserId() == null) {
-            return Response.seeOther(OAuthRedirectBuilder.build("/login", Map.of("state", state))).build();
+            return Uni.createFrom().item(Response.seeOther(
+                    OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
         }
-        return Response.seeOther(OAuthRedirectBuilder.build("/consent", Map.of("state", state))).build();
+        return cacheService.getConsent(requestState.getUserId(), requestState.getClientId())
+                .flatMap(consent -> {
+                    if (consent != null && ScopeUtil.coversScopes(consent.getScopes(), requestState.getScope())) {
+                        return authorizationCodeService.issueCodeAndRedirect(
+                                requestState.getUserId(), requestState, state);
+                    }
+                    return Uni.createFrom().item(Response.seeOther(
+                            OAuthRedirectBuilder.build("/consent", Map.of("state", state))).build());
+                });
     }
 }

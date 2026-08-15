@@ -86,6 +86,7 @@ class LoginEndpointTest {
     @Test
     void postLogin_validCredentials_withState_redirectsToConsent() {
         String state = "login-test-state";
+        awaitVoid(cacheService.deleteConsent("b0000000-0000-0000-0000-000000000001", "test-client"));
         awaitVoid(cacheService.saveAuthorizationRequestState(state, new AuthorizationRequestState(
             "test-client", "http://localhost:8080/callback", List.of("openid"), state, null, null, null, null
         ), 600));

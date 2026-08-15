@@ -51,7 +51,10 @@ docker compose up -d
 | `GET`/`POST` | `/login` | Страница входа |
 | `GET`/`POST` | `/consent` | Экран согласия |
 | `POST` | `/token` | Token Endpoint |
+| `POST` | `/introspect` | Token Introspection (RFC 7662) |
+| `POST` | `/revoke` | Token Revocation (RFC 7009) |
 | `GET` | `/logout` | Выход (удаление сессии) |
+| `GET` | `/error` | Страница ошибки (HTML) |
 | `GET` | `/.well-known/jwks.json` | Публичные ключи JWT |
 | `POST` | `/admin/clients` | Регистрация клиента |
 | `GET` | `/admin/clients` | Список клиентов |
@@ -191,7 +194,7 @@ curl -s -X POST http://localhost:8080/admin/clients \
 | `scope` | нет | Повторяемые query-параметры, напр. `scope=openid&scope=profile` |
 | `code_challenge` | нет* | PKCE challenge ([RFC 7636](https://www.rfc-editor.org/info/rfc7636)) |
 | `code_challenge_method` | нет | `S256` (по умолчанию) или `plain`; только вместе с `code_challenge` |
-| `nonce` | нет | Зарезервировано под OIDC |
+| `nonce` | нет | OIDC nonce (включается в `id_token` при scope `openid`) |
 
 \* Если передан `code_challenge`, на `/token` обязателен `code_verifier`.
 
@@ -277,9 +280,14 @@ curl -s -X POST http://localhost:8080/token \
   "token_type": "Bearer",
   "expires_in": 3600,
   "refresh_token": "eyJ…",
-  "scope": "openid profile"
+  "scope": "openid profile",
+  "id_token": "eyJ…"
 }
 ```
+
+Поле `id_token` присутствует **только** при наличии scope `openid` (OIDC). При refresh с scope `openid` также выдаётся новый `id_token`.
+
+Клиент может аутентифицироваться через form-параметры `client_id`/`client_secret` **или** заголовок `Authorization: Basic base64(client_id:client_secret)`.
 
 Код одноразовый: повторный обмен → `invalid_grant`.
 
@@ -309,6 +317,52 @@ curl -s -X POST http://localhost:8080/token \
 ### 6. JWKS — `GET /.well-known/jwks.json`
 
 Публичный RSA-ключ для проверки подписи JWT. Алгоритм подписи задаётся в `etheric.jwt.algorithm` (по умолчанию **RS256**).
+
+### 7. Token Introspection — `POST /introspect`
+
+RFC 7662. Form: `token`, опционально `token_type_hint` (`access_token` / `refresh_token`). Требуется аутентификация клиента (form или Basic Auth).
+
+**Ответ `200` (активный токен):**
+
+```json
+{
+  "active": true,
+  "scope": "openid profile",
+  "client_id": "test-client",
+  "sub": "…",
+  "token_type": "Bearer",
+  "exp": 1234567890,
+  "iss": "etheric"
+}
+```
+
+Неизвестный или истёкший токен: `{ "active": false }`.
+
+### 8. Token Revocation — `POST /revoke`
+
+RFC 7009. Form: `token`, опционально `token_type_hint`. Требуется аутентификация клиента. Всегда возвращает `200` (даже если токен не найден).
+
+### 9. Error page — `GET /error`
+
+HTML-страница ошибки. Query: `error`, `description` (опционально).
+
+---
+
+## Rate limiting
+
+Эндпоинты `/authorize`, `/login`, `/token`, `/consent` (POST) защищены Redis-based rate limiter. При превышении лимита — `429`:
+
+```json
+{ "error": "temporarily_unavailable", "error_description": "Rate limit exceeded. Please try again later." }
+```
+
+Настройки: `etheric.rate-limit.*` (см. §Конfigурация).
+
+---
+
+## Remember consent
+
+После одобрения consent сохраняется в Redis (`auth:consent:{userId}:{clientId}`) на срок `etheric.cache.consent-ttl-seconds` (по умолчанию 30 дней). При повторной авторизации с теми же или меньшими scope consent-страница пропускается.
 
 ---
 
@@ -370,11 +424,27 @@ JSON на Token Endpoint / admin:
 | `etheric.jwt.algorithm` | Алгоритм подписи JWT (JWKS `alg`) | `RS256` |
 | `etheric.jwt.private-key-location` | Путь к PEM приватного ключа | `keys/private.pem` |
 | `etheric.jwt.public-key-location` | Путь к PEM публичного ключа | `keys/public.pem` |
+| `etheric.rate-limit.enabled` | Включить rate limiting | `true` |
+| `etheric.rate-limit.window-seconds` | Окно rate limit (с) | `60` |
+| `etheric.rate-limit.authorize-max` | Макс. запросов `/authorize` за окно | `60` |
+| `etheric.rate-limit.login-max` | Макс. запросов `/login` за окно | `20` |
+| `etheric.rate-limit.token-max` | Макс. запросов `/token` за окно | `30` |
+| `etheric.rate-limit.consent-max` | Макс. POST `/consent` за окно | `20` |
+| `etheric.cache.client-ttl-seconds` | TTL локального кэша клиентов (Caffeine) | `60` |
+| `etheric.cache.consent-ttl-seconds` | TTL remember-consent (с) | `2592000` (30 дней) |
 | `quarkus.datasource.*` | PostgreSQL (клиенты, пользователи) | см. файл |
 | `quarkus.redis.hosts` | Redis (сессии, коды, токены) | `redis://localhost:6379` |
 | `quarkus.shutdown.timeout` | Graceful shutdown — ожидание завершения HTTP-запросов | `PT30S` |
 
 Архитектурный документ: [`docs/Etheric.md`](docs/Etheric.md).
+
+### Native build (GraalVM)
+
+```bash
+./mvnw package -Dnative
+```
+
+Требует установленный GraalVM. Результат: `target/Etheric-1.0-SNAPSHOT-runner`.
 
 ---
 
