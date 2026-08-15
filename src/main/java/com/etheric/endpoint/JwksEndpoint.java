@@ -9,6 +9,12 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+/**
+ * JSON Web Key Set endpoint ({@code GET /.well-known/jwks.json}).
+ * <p>
+ * Returns the server's public RSA key(s) for verifying JWT access/refresh tokens.
+ * Success: {@code 200} JSON {@code {"keys":[…]}}.
+ */
 @Path("/.well-known")
 public class JwksEndpoint {
 

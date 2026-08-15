@@ -23,6 +23,15 @@ import jakarta.ws.rs.core.Response;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * OAuth 2.0 Token Endpoint ({@code POST /token}).
+ * <p>
+ * Form params: {@code grant_type} ({@code authorization_code} or {@code refresh_token}), plus
+ * grant-specific fields ({@code code}, {@code redirect_uri}, {@code client_id}, {@code client_secret},
+ * {@code code_verifier}, {@code refresh_token}, {@code scope}).
+ * Success: {@code 200} JSON with {@code access_token}, {@code refresh_token}, {@code expires_in}.
+ * Errors: JSON {@code 400} (OAuth errors) or {@code 401} ({@code invalid_client}).
+ */
 @Path("/token")
 public class TokenEndpoint {
 

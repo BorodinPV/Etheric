@@ -58,6 +58,22 @@ docker compose up -d
 | `GET` | `/admin/clients/{client_id}` | Клиент по id |
 | `GET` | `/health/live`, `/health/ready` | Health checks |
 
+### Health
+
+| Путь | Назначение |
+|------|------------|
+| `/health/live` | **Liveness** — процесс жив (без проверки зависимостей) |
+| `/health/ready` | **Readiness** — готов принимать трафик |
+
+Readiness-проверки на `/health/ready`:
+
+| Имя | Зависимость |
+|-----|-------------|
+| `postgresql` | PostgreSQL (запрос к БД) |
+| `redis` | Redis (ping/set) |
+
+Ответ `200` — все проверки `UP`; иначе `503` с деталями упавших проверок.
+
 ---
 
 ## Регистрация клиента (Admin API)
@@ -111,15 +127,52 @@ curl -s -X POST http://localhost:8080/admin/clients \
   "redirect_uris": ["http://localhost:3000/callback"],
   "scopes": ["openid", "profile"],
   "grant_types": ["authorization_code", "refresh_token"],
-  "enabled": true
+  "enabled": true,
+  "client_logo": null,
+  "client_description": null
 }
 ```
 
-Ошибки: `401` (нет/неверный ключ), `400` (валидация), `409` (`client_id` уже занят).
+Поля `client_logo` и `client_description` опциональны (могут отсутствовать или быть `null`).
+
+**Ошибки Admin API:**
+
+| HTTP | `error` | Когда |
+|------|---------|-------|
+| `401` | `unauthorized` | Нет или неверный `X-Admin-Api-Key` |
+| `400` | `invalid_request` | Ошибка валидации тела запроса |
+| `409` | `conflict` | `client_id` уже занят |
+
+Пример `401`:
+
+```json
+{
+  "error": "unauthorized",
+  "error_description": "Missing or invalid X-Admin-Api-Key"
+}
+```
+
+Пример `409`:
+
+```json
+{
+  "error": "conflict",
+  "error_description": "client_id already exists"
+}
+```
 
 ### `GET /admin/clients` / `GET /admin/clients/{client_id}`
 
 Возвращают метаданные **без** `client_secret`.
+
+`GET /admin/clients/{client_id}` при неизвестном id → `404`:
+
+```json
+{
+  "error": "not_found",
+  "error_description": "Client not found"
+}
+```
 
 ---
 
@@ -164,10 +217,16 @@ http://localhost:8080/authorize?response_type=code&client_id=test-client&redirec
 {redirect_uri}?code=…&state=xyz
 ```
 
-При ошибке (если `redirect_uri` валиден):
+При ошибке (если `redirect_uri` передан и валиден):
 
 ```
 {redirect_uri}?error=invalid_request&error_description=…&state=xyz
+```
+
+Если `redirect_uri` **отсутствует или пуст**, редирект невозможен — сервер возвращает JSON `400`:
+
+```json
+{ "error": "invalid_request", "error_description": "…" }
 ```
 
 ### 2. Login — `GET` / `POST /login`
@@ -237,11 +296,19 @@ curl -s -X POST http://localhost:8080/token \
 
 ### 5. Logout — `GET /logout`
 
-Опционально: `?redirect_uri=…`. Удаляет сессию и очищает cookie.
+Опционально: `?redirect_uri=…`. Удаляет сессию и очищает cookie `SESSIONID`.
+
+| `redirect_uri` | Поведение |
+|----------------|-----------|
+| не передан или пуст | редирект `303` на `/` |
+| зарегистрирован у клиента | редирект `303` на указанный URI |
+| не зарегистрирован | редирект `303` на `/` (open redirect не допускается) |
+
+Проверка: URI должен присутствовать в `redirect_uris` хотя бы одного клиента в PostgreSQL (`ClientRepository.isRegisteredRedirectUri()`).
 
 ### 6. JWKS — `GET /.well-known/jwks.json`
 
-Публичный RSA-ключ для проверки подписи JWT (алгоритм **RS256**).
+Публичный RSA-ключ для проверки подписи JWT. Алгоритм подписи задаётся в `etheric.jwt.algorithm` (по умолчанию **RS256**).
 
 ---
 
@@ -255,9 +322,9 @@ curl -s -X POST http://localhost:8080/token \
 | `iat` / `exp` | Время выдачи / истечения |
 | `token_type` | Только у refresh: `refresh` |
 
-Подпись **RS256**. Ключи загружаются из PEM (`etheric.jwt.private-key-location` / `public-key-location`); при отсутствии файлов — эфемерная пара (WARN в логе, только dev). Заголовок JWT содержит стабильный `kid` (хеш публичного ключа).
+Подпись берётся из `etheric.jwt.algorithm` (по умолчанию **RS256**). Ключи загружаются из PEM (`etheric.jwt.private-key-location` / `public-key-location`); при отсутствии файлов — эфемерная пара (WARN в логе, только dev). Заголовок JWT содержит стабильный `kid` (хеш публичного ключа).
 
-TTL берётся из конфига (`etheric.jwt.access-token-lifetime`, `refresh-token-lifetime`) и совпадает с TTL записей в Redis. По умолчанию: access **1 ч**, refresh **7 дней**, auth code **10 мин**.
+TTL берётся из конфига (`etheric.jwt.*-lifetime`, см. §Конфигурация) и совпадает с TTL записей в Redis. По умолчанию: access **1 ч**, refresh **7 дней**, auth code **10 мин**, сессия **8 ч**, request state **10 мин**.
 
 ---
 
@@ -290,11 +357,22 @@ JSON на Token Endpoint / admin:
 
 Ключевые свойства в `src/main/resources/application.properties`:
 
-- `etheric.admin.api-key` — ключ Admin API  
-- `etheric.session.cookie.secure` — флаг Secure у `SESSIONID`  
-- `etheric.jwt.*` — TTL токенов, issuer, пути ключей  
-- PostgreSQL — `quarkus.datasource.*` (клиенты, пользователи)  
-- Redis — `quarkus.redis.hosts` (сессии, коды, токены)
+| Свойство | Описание | По умолчанию |
+|----------|----------|--------------|
+| `etheric.admin.api-key` | Ключ Admin API | `change-me-admin-key` |
+| `etheric.session.cookie.secure` | Флаг Secure у cookie `SESSIONID` | `true` |
+| `etheric.jwt.access-token-lifetime` | TTL access-токена (с) | `3600` |
+| `etheric.jwt.refresh-token-lifetime` | TTL refresh-токена (с) | `604800` |
+| `etheric.jwt.authorization-code-lifetime` | TTL auth code (с) | `600` |
+| `etheric.jwt.session-lifetime` | TTL сессии (с) | `28800` |
+| `etheric.jwt.request-state-lifetime` | TTL `auth:request:{state}` (с) | `600` |
+| `etheric.jwt.issuer` | Claim `iss` в JWT | `etheric` |
+| `etheric.jwt.algorithm` | Алгоритм подписи JWT (JWKS `alg`) | `RS256` |
+| `etheric.jwt.private-key-location` | Путь к PEM приватного ключа | `keys/private.pem` |
+| `etheric.jwt.public-key-location` | Путь к PEM публичного ключа | `keys/public.pem` |
+| `quarkus.datasource.*` | PostgreSQL (клиенты, пользователи) | см. файл |
+| `quarkus.redis.hosts` | Redis (сессии, коды, токены) | `redis://localhost:6379` |
+| `quarkus.shutdown.timeout` | Graceful shutdown — ожидание завершения HTTP-запросов | `PT30S` |
 
 Архитектурный документ: [`docs/Etheric.md`](docs/Etheric.md).
 
@@ -302,11 +380,14 @@ JSON на Token Endpoint / admin:
 
 ## Тесты
 
-Требуется **Docker**. Dev Services **отключены** в `src/test/resources/application.properties` — перед запуском тестов поднимите инфраструктуру:
+Требуется **Docker Desktop** (демон Docker должен быть запущен).
+
+При `mvn test` / `mvn package` Maven **автоматически** выполняет `docker compose up -d --wait` перед тестами (см. `exec-maven-plugin` в `pom.xml`). Отключить: `-DskipDockerCompose=true` (если контейнеры уже подняты вручную).
 
 ```bash
-docker compose up -d
 ./mvnw test
 ```
 
-Тесты подключаются к PostgreSQL (`localhost:5432`, `etheric` / `etheric`) и Redis (`localhost:6379`). Admin API key в тестовом профиле: `test-admin-key` (`%test.etheric.admin.api-key`).
+Тесты подключаются к PostgreSQL (`localhost:5432`, `etheric` / `etheric`) и Redis (`localhost:6379`). Admin API key: `test-admin-key`. В тестовом профиле `%test` cookie сессии принудительно с `Secure`: `%test.etheric.session.cookie.secure=true` (см. `src/test/resources/application.properties`).
+
+**Типичная ошибка:** `Connection refused: localhost:5432` — Docker Desktop не запущен, либо контейнеры не успели подняться. Проверка: `docker compose ps` (оба сервиса `healthy`). Вручную: `docker compose up -d --wait`.

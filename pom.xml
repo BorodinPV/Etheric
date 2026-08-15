@@ -22,6 +22,7 @@
         <quarkus-plugin.version>3.15.1</quarkus-plugin.version>
         <surefire-plugin.version>3.2.5</surefire-plugin.version>
         <mutiny.version>2.6.0</mutiny.version>
+        <skipDockerCompose>false</skipDockerCompose>
     </properties>
 
     <dependencyManagement>
@@ -186,6 +187,30 @@
                         <net.bytebuddy.experimental>true</net.bytebuddy.experimental>
                     </systemPropertyVariables>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>docker-compose-up-for-tests</id>
+                        <phase>process-test-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>docker</executable>
+                            <arguments>
+                                <argument>compose</argument>
+                                <argument>up</argument>
+                                <argument>-d</argument>
+                                <argument>--wait</argument>
+                            </arguments>
+                            <skip>${skipDockerCompose}</skip>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

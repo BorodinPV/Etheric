@@ -7,6 +7,8 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.resteasy.reactive.server.ServerRequestFilter;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Map;
 
 /**
@@ -32,7 +34,7 @@ public class AdminAuthFilter {
         }
 
         String provided = requestContext.getHeaderString(HEADER_NAME);
-        if (provided == null || provided.isBlank() || !provided.equals(apiKey)) {
+        if (provided == null || provided.isBlank() || !secureEquals(provided, apiKey)) {
             return Response.status(Response.Status.UNAUTHORIZED)
                     .type(MediaType.APPLICATION_JSON)
                     .entity(Map.of(
@@ -42,5 +44,14 @@ public class AdminAuthFilter {
                     .build();
         }
         return null;
+    }
+
+    private static boolean secureEquals(String left, String right) {
+        if (left == null || right == null) {
+            return left == right;
+        }
+        return MessageDigest.isEqual(
+                left.getBytes(StandardCharsets.UTF_8),
+                right.getBytes(StandardCharsets.UTF_8));
     }
 }

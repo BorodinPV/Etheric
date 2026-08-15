@@ -19,10 +19,18 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
-import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * OAuth 2.0 Authorization Endpoint ({@code GET /authorize}).
+ * <p>
+ * Query params: {@code response_type=code}, {@code client_id}, {@code redirect_uri}, {@code state}
+ * (required); optional {@code scope}, {@code code_challenge}, {@code code_challenge_method}, {@code nonce}.
+ * Success: {@code 302} redirect to {@code /login} or {@code /consent}.
+ * Errors with a valid {@code redirect_uri}: {@code 302} to client with {@code error} query params;
+ * without {@code redirect_uri}: JSON {@code 400} ({@code invalid_request}, etc.).
+ */
 @Path("/authorize")
 public class AuthorizationEndpoint {
 

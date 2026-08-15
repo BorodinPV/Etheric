@@ -131,7 +131,7 @@ class AdminClientsEndpointTest {
             .post("/admin/clients")
         .then()
             .statusCode(409)
-            .body("error", equalTo("invalid_request"));
+            .body("error", equalTo("conflict"));
     }
 
     @Test

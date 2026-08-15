@@ -27,6 +27,37 @@
 
 ---
 
+## Статус реализации (Implementation status)
+
+Текущая кодовая база реализует **ядро OAuth 2.0 Authorization Code Grant** из спецификации v7.0. Ниже — что уже работает и что отложено.
+
+### Реализовано
+
+- Authorization Code Flow: `/authorize`, `/login`, `/consent`, `/token`, `/logout`
+- Хранение: PostgreSQL (клиенты, пользователи) + Redis (сессии, коды, токены, request state)
+- PKCE (S256 и plain) на `/authorize` и `/token`
+- Admin API: регистрация и просмотр клиентов (`/admin/clients`)
+- JWT access/refresh-токены, JWKS (`/.well-known/jwks.json`), алгоритм из `etheric.jwt.algorithm`
+- Health checks: `/health/live`, `/health/ready` (PostgreSQL, Redis)
+- CSRF на login/consent, валидация `redirect_uri`, ротация refresh-токенов
+- Dev seed, Flyway-миграции, graceful shutdown (`quarkus.shutdown.timeout`)
+- HTML-шаблоны login/consent (Qute), маскирование секретов в логах, CORS
+
+### Отложено (DEFERRED)
+
+- **OpenID Connect / `id_token`** — метод генерации id_token есть, но не подключён к потоку
+- **Резервное хранение auth code в PostgreSQL** — таблица `authorization_codes` не создана
+- **Страница `/error`** — шаблон `templates/error.html` существует, эндпоинт не подключён
+- **Basic Auth на `/token`** — только form-параметры `client_id` / `client_secret`
+- **Retry/fallback при ошибках Redis** — ошибки соединения не перехватываются с повторами
+- **Rate limiting** — не реализован
+- **Token introspection / revocation** (RFC 7662 / RFC 7009)
+- **Пропуск consent** для повторных авторизаций («remember consent»)
+- **Native/AOT и целевые метрики производительности** (§8.1)
+- **Локальный кэш Caffeine** перед Redis
+
+---
+
 ## 2. Архитектура и протокол
 
 ### 2.1. Базовые эндпоинты (согласно RFC 6749)

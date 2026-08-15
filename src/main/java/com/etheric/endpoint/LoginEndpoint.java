@@ -17,6 +17,14 @@ import java.net.URI;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Login page for the authorization flow ({@code GET|POST /login}).
+ * <p>
+ * GET: optional {@code state} query param; returns HTML form, sets {@code SESSIONID} cookie.
+ * POST form: {@code username}, {@code password}, {@code state}, {@code csrf_token}.
+ * Success: {@code 302} to {@code /consent} (or {@code /} without state).
+ * Errors: {@code 403} on invalid CSRF; HTML page with message on bad credentials.
+ */
 @Path("/login")
 public class LoginEndpoint {
 

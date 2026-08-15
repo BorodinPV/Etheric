@@ -12,6 +12,12 @@ import jakarta.ws.rs.core.*;
 
 import java.net.URI;
 
+/**
+ * Session logout ({@code GET /logout}).
+ * <p>
+ * Optional {@code redirect_uri} query param (must be a registered client redirect URI).
+ * Deletes session and clears {@code SESSIONID} cookie; {@code 302} to target URI or {@code /}.
+ */
 @Path("/logout")
 public class LogoutEndpoint {
 

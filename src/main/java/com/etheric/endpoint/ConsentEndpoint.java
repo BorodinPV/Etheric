@@ -17,9 +17,17 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-import java.net.URI;
+import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Consent screen for the authorization flow ({@code GET|POST /consent}).
+ * <p>
+ * GET: {@code state} query param; returns HTML consent page (requires session).
+ * POST form: {@code action=approve|deny}, {@code state}, {@code csrf_token}.
+ * Approve: {@code 302} redirect to client {@code redirect_uri} with authorization {@code code}.
+ * Deny: {@code 302} with {@code error=access_denied}. Invalid session/state: {@code 400}/{@code 403}.
+ */
 @Path("/consent")
 public class ConsentEndpoint {
 
@@ -47,12 +55,14 @@ public class ConsentEndpoint {
 
         String sessionId = SessionCookieFactory.extractSessionId(headers);
         if (sessionId == null) {
-            return Uni.createFrom().item(Response.seeOther(URI.create("/login?state=" + state)).build());
+            return Uni.createFrom().item(Response.seeOther(
+                    OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
         }
 
         return cacheService.getSession(sessionId).flatMap(session -> {
             if (session == null) {
-                return Uni.createFrom().item(Response.seeOther(URI.create("/login?state=" + state)).build());
+                return Uni.createFrom().item(Response.seeOther(
+                    OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
             }
             return cacheService.getAuthorizationRequestState(state).flatMap(requestState -> {
                 if (requestState == null) {
@@ -87,12 +97,14 @@ public class ConsentEndpoint {
 
         String sessionId = SessionCookieFactory.extractSessionId(headers);
         if (sessionId == null) {
-            return Uni.createFrom().item(Response.seeOther(URI.create("/login?state=" + state)).build());
+            return Uni.createFrom().item(Response.seeOther(
+                    OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
         }
 
         return cacheService.getSession(sessionId).flatMap(session -> {
             if (session == null) {
-                return Uni.createFrom().item(Response.seeOther(URI.create("/login?state=" + state)).build());
+                return Uni.createFrom().item(Response.seeOther(
+                    OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
             }
             if (csrfToken == null || !csrfToken.equals(session.getCsrfToken())) {
                 return Uni.createFrom().item(Response.status(Response.Status.FORBIDDEN)

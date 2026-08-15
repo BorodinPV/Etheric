@@ -1,6 +1,5 @@
 package com.etheric.endpoint;
 
-import com.etheric.config.EthericTtlConfig;
 import com.etheric.entity.Client;
 import com.etheric.model.ClientRegistrationRequest;
 import com.etheric.model.ClientRegistrationResponse;
@@ -16,6 +15,15 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Admin API for OAuth client registration ({@code /admin/clients}).
+ * <p>
+ * Requires {@code X-Admin-Api-Key} header (enforced by {@link com.etheric.security.AdminAuthFilter}).
+ * {@code POST}: JSON body with {@code client_name}, {@code redirect_uris} (required); optional
+ * {@code scopes}, {@code grant_types}, {@code client_id}, {@code client_logo}, {@code client_description}.
+ * Success: {@code 201} with {@code client_id} and one-time {@code client_secret}.
+ * {@code GET}: list or fetch by {@code client_id} (no secret). Errors: {@code 401}, {@code 400}, {@code 409}, {@code 404}.
+ */
 @Path("/admin/clients")
 @Produces(MediaType.APPLICATION_JSON)
 public class AdminClientsEndpoint {
@@ -52,7 +60,7 @@ public class AdminClientsEndpoint {
         final String resolvedClientId = clientId;
         return clientRepository.findByClientId(resolvedClientId).flatMap(existing -> {
             if (existing.isPresent()) {
-                return Uni.createFrom().item(conflict("invalid_request", "client_id already exists"));
+                return Uni.createFrom().item(conflict("conflict", "client_id already exists"));
             }
 
             String plaintextSecret = UUID.randomUUID().toString() + UUID.randomUUID();

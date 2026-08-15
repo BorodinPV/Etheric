@@ -50,9 +50,12 @@ public class JwtService {
     private RSAPublicKey publicKey;
     private RSAPrivateKey privateKey;
     private String keyId;
+    private SignatureAlgorithm signatureAlgorithm;
 
     @PostConstruct
     public void init() {
+        signatureAlgorithm = resolveSignatureAlgorithm(ttlConfig.algorithm());
+
         Optional<String> privateLoc = ttlConfig.privateKeyLocation();
         Optional<String> publicLoc = ttlConfig.publicKeyLocation();
 
@@ -72,6 +75,20 @@ public class JwtService {
             }
         }
         generateEphemeralKeys();
+    }
+
+    private SignatureAlgorithm resolveSignatureAlgorithm(String algorithm) {
+        if (algorithm == null || algorithm.isBlank()) {
+            throw new IllegalStateException("etheric.jwt.algorithm must not be blank");
+        }
+        try {
+            return SignatureAlgorithm.valueOf(algorithm.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException(
+                    "Unsupported JWT algorithm: " + algorithm + ". Supported values: "
+                            + java.util.Arrays.toString(SignatureAlgorithm.values()),
+                    e);
+        }
     }
 
     private void generateEphemeralKeys() {
@@ -152,7 +169,7 @@ public class JwtService {
                 .claim("scopes", scopes)
                 .issuedAt(now)
                 .expiresAt(now + expiry)
-                .jws().algorithm(SignatureAlgorithm.RS256)
+                .jws().algorithm(signatureAlgorithm)
                 .keyId(keyId)
                 .sign(privateKey);
     }
@@ -168,7 +185,7 @@ public class JwtService {
                 .claim("token_type", "refresh")
                 .issuedAt(now)
                 .expiresAt(now + expiry)
-                .jws().algorithm(SignatureAlgorithm.RS256)
+                .jws().algorithm(signatureAlgorithm)
                 .keyId(keyId)
                 .sign(privateKey);
     }
@@ -199,7 +216,7 @@ public class JwtService {
             }
         }
 
-        return builder.jws().algorithm(SignatureAlgorithm.RS256)
+        return builder.jws().algorithm(signatureAlgorithm)
                 .keyId(keyId)
                 .sign(privateKey);
     }
@@ -246,7 +263,7 @@ public class JwtService {
                 "RSA",
                 keyId,
                 "sig",
-                "RS256",
+                signatureAlgorithm.name(),
                 Base64.getUrlEncoder().withoutPadding().encodeToString(publicKey.getModulus().toByteArray()),
                 Base64.getUrlEncoder().withoutPadding().encodeToString(publicKey.getPublicExponent().toByteArray())
         );
