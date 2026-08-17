@@ -34,9 +34,6 @@ public class ClientRegistrationResponse {
 
     private boolean enabled;
 
-    @JsonProperty("client_logo")
-    private String clientLogo;
-
     @JsonProperty("client_description")
     private String clientDescription;
 }

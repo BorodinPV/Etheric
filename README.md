@@ -148,7 +148,6 @@ X-Admin-Api-Key: <etheric.admin.api-key>
 | `scopes` | нет | По умолчанию `openid`, `profile`, `email` |
 | `grant_types` | нет | По умолчанию `authorization_code`, `refresh_token` |
 | `client_id` | нет | Свой id (иначе UUID с префиксом `client-`) |
-| `client_logo` | нет | URL логотипа |
 | `client_description` | нет | Описание для экрана согласия |
 
 **Пример:**
@@ -176,12 +175,11 @@ curl -s -X POST http://localhost:8080/admin/clients \
   "scopes": ["openid", "profile"],
   "grant_types": ["authorization_code", "refresh_token"],
   "enabled": true,
-  "client_logo": null,
   "client_description": null
 }
 ```
 
-Поля `client_logo` и `client_description` опциональны (могут отсутствовать или быть `null`).
+Поле `client_description` опционально (может отсутствовать или быть `null`).
 
 **Ошибки Admin API:**
 
@@ -233,7 +231,6 @@ curl -s -X POST http://localhost:8080/admin/clients \
 | `scopes` | Разрешённые scopes |
 | `grant_types` | Поддерживаемые grant types |
 | `enabled` | Активен ли клиент |
-| `client_logo` | URL логотипа |
 | `client_description` | Описание для экрана согласия |
 
 Ответ `200` — объект клиента **без** `client_secret`.

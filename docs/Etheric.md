@@ -182,7 +182,7 @@
 
 ### 4.2. Структура таблиц PostgreSQL (описание)
 
-- **Таблица `clients`** содержит поля: `id` (UUID), `client_id` (уникальный текстовый), `client_secret_hash`, `client_name`, `redirect_uris` (массив текстовых URI), `scopes` (массив), `grant_types` (массив), `enabled` (булев), `created_at`, а также опциональные `client_logo` (ссылка на картинку) и `client_description` для отображения на экране согласия.
+- **Таблица `clients`** содержит поля: `id` (UUID), `client_id` (уникальный текстовый), `client_secret_hash`, `client_name`, `redirect_uris` (массив текстовых URI), `scopes` (массив), `grant_types` (массив), `enabled` (булев), `created_at`, а также опциональное `client_description` для отображения на экране согласия.
 - **Таблица `users`** содержит поля: `id` (UUID), `username` (уникальный), `password_hash`, `email`, `roles` (массив), `enabled` (булев), `created_at`.
 - **Таблица `authorization_codes`** (резервное хранилище) – может использоваться для дублирования кодов, но в основном они живут в Redis. Содержит `code` (текстовый, PK), `client_id`, `user_id` (внешний ключ к `users`), `redirect_uri`, `scopes` (массив), `created_at`, `expires_at`.
 

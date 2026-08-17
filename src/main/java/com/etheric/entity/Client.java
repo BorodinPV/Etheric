@@ -49,9 +49,6 @@ public class Client extends PanacheEntityBase {
     @Column(name = "created_at", nullable = false)
     public OffsetDateTime createdAt;
 
-    @Column(name = "client_logo")
-    public String clientLogo;
-
     @Column(name = "client_description")
     public String clientDescription;
 
@@ -60,7 +57,7 @@ public class Client extends PanacheEntityBase {
 
     public Client(UUID id, String clientId, String clientSecretHash, String clientName,
                   List<String> redirectUris, List<String> scopes, List<String> grantTypes,
-                  boolean enabled, OffsetDateTime createdAt, String clientLogo, String clientDescription) {
+                  boolean enabled, OffsetDateTime createdAt, String clientDescription) {
         this.id = id;
         this.clientId = clientId;
         this.clientSecretHash = clientSecretHash;
@@ -70,7 +67,6 @@ public class Client extends PanacheEntityBase {
         this.grantTypes = grantTypes;
         this.enabled = enabled;
         this.createdAt = createdAt;
-        this.clientLogo = clientLogo;
         this.clientDescription = clientDescription;
     }
 }

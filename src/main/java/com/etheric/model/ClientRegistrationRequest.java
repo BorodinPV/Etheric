@@ -23,9 +23,6 @@ public class ClientRegistrationRequest {
     @JsonProperty("grant_types")
     private List<String> grantTypes;
 
-    @JsonProperty("client_logo")
-    private String clientLogo;
-
     @JsonProperty("client_description")
     private String clientDescription;
 

@@ -249,7 +249,6 @@ public class AdminConsoleEndpoint {
             @FormParam("scopes") String scopes,
             @FormParam("grant_types") String grantTypes,
             @FormParam("enabled") String enabled,
-            @FormParam("client_logo") String clientLogo,
             @FormParam("client_description") String clientDescription,
             @Context ContainerRequestContext requestContext) {
 
@@ -264,7 +263,6 @@ public class AdminConsoleEndpoint {
         request.setScopes(splitCsv(scopes));
         request.setGrantTypes(splitCsv(grantTypes));
         request.setEnabled("on".equals(enabled));
-        request.setClientLogo(clientLogo);
         request.setClientDescription(clientDescription);
 
         return adminClientService.update(clientId, request).flatMap(result -> {

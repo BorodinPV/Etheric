@@ -63,7 +63,7 @@ public class AdminClientService {
             Client client = new Client(
                     UUID.randomUUID(), resolvedClientId, secretHash, request.getClientName().trim(),
                     List.copyOf(request.getRedirectUris()), scopes, grantTypes, true,
-                    OffsetDateTime.now(), request.getClientLogo(), request.getClientDescription());
+                    OffsetDateTime.now(), request.getClientDescription());
 
             return clientRepository.persistClient(client)
                     .map(saved -> AdminServiceResult.ok(toResponse(saved, plaintextSecret)));
@@ -91,7 +91,6 @@ public class AdminClientService {
                 && request.getScopes() == null
                 && request.getGrantTypes() == null
                 && request.getEnabled() == null
-                && request.getClientLogo() == null
                 && request.getClientDescription() == null) {
             return Uni.createFrom().item(AdminServiceResult.badRequest(
                     "invalid_request", "at least one field must be provided"));
@@ -141,9 +140,6 @@ public class AdminClientService {
             if (request.getEnabled() != null) {
                 client.enabled = request.getEnabled();
             }
-            if (request.getClientLogo() != null) {
-                client.clientLogo = request.getClientLogo().isBlank() ? null : request.getClientLogo().trim();
-            }
             if (request.getClientDescription() != null) {
                 client.clientDescription = request.getClientDescription().isBlank()
                         ? null : request.getClientDescription().trim();
@@ -170,6 +166,6 @@ public class AdminClientService {
     public static ClientRegistrationResponse toResponse(Client client, String plaintextSecret) {
         return new ClientRegistrationResponse(
                 client.clientId, plaintextSecret, client.clientName, client.redirectUris,
-                client.scopes, client.grantTypes, client.enabled, client.clientLogo, client.clientDescription);
+                client.scopes, client.grantTypes, client.enabled, client.clientDescription);
     }
 }

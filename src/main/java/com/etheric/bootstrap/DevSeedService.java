@@ -67,7 +67,6 @@ public class DevSeedService {
                     List.of("authorization_code", "refresh_token"),
                     true,
                     OffsetDateTime.now(),
-                    null,
                     "A test OAuth client application"
             );
             User user = new User(
