@@ -1,0 +1,35 @@
+<div class="pf-c-toolbar">
+    <form class="pf-c-search" method="get" action="/admin/console/users">
+        <input class="pf-c-form-control" type="search" name="search" value="{search}" placeholder="Search users...">
+    </form>
+    <a class="pf-c-button pf-m-primary" href="/admin/console/users/create">Create user</a>
+</div>
+
+{#if users.isEmpty()}
+<div class="pf-c-empty">No users found.</div>
+{#else}
+<table class="pf-c-table">
+    <thead>
+    <tr>
+        <th>Username</th>
+        <th>Email</th>
+        <th>Enabled</th>
+    </tr>
+    </thead>
+    <tbody>
+    {#for user in users}
+    <tr>
+        <td><a href="/admin/console/users/{user.id}/details">{user.username}</a></td>
+        <td>{#if user.email}{user.email}{#else}-{/if}</td>
+        <td>
+            {#if user.enabled}
+            <span class="pf-c-badge pf-m-success">Yes</span>
+            {#else}
+            <span class="pf-c-badge pf-m-danger">No</span>
+            {/if}
+        </td>
+    </tr>
+    {/for}
+    </tbody>
+</table>
+{/if}

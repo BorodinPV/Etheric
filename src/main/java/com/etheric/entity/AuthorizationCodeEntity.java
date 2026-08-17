@@ -2,6 +2,7 @@ package com.etheric.entity;
 
 import com.etheric.persistence.StringListJsonConverter;
 import io.quarkus.hibernate.reactive.panache.PanacheEntityBase;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -13,6 +14,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "authorization_codes")
+@RegisterForReflection
 public class AuthorizationCodeEntity extends PanacheEntityBase {
 
     @Id

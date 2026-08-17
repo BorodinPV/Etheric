@@ -75,6 +75,14 @@ public class ClientRepository implements PanacheRepository<Client> {
         return persist(client).replaceWith(client);
     }
 
+    @WithTransaction
+    @CacheInvalidateAll(cacheName = "clients")
+    public Uni<Void> updateClient(Client client) {
+        return Client.getSession()
+                .flatMap(session -> session.merge(client))
+                .replaceWithVoid();
+    }
+
     @WithSession
     public Uni<List<Client>> findAllClients() {
         return listAll();

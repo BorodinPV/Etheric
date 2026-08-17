@@ -2,6 +2,7 @@ package com.etheric.entity;
 
 import com.etheric.persistence.StringListJsonConverter;
 import io.quarkus.hibernate.reactive.panache.PanacheEntityBase;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -14,6 +15,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "clients")
+@RegisterForReflection
 public class Client extends PanacheEntityBase {
 
     @Id

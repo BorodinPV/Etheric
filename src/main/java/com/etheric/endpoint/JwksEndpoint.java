@@ -2,6 +2,7 @@ package com.etheric.endpoint;
 
 import com.etheric.model.JwksResponse;
 import com.etheric.service.JwtService;
+import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -24,8 +25,8 @@ public class JwksEndpoint {
     @GET
     @Path("/jwks.json")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getJwks() {
+    public Uni<Response> getJwks() {
         JwksResponse jwks = jwtService.getJwks();
-        return Response.ok(jwks).build();
+        return Uni.createFrom().item(Response.ok(jwks).build());
     }
 }

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{pageTitle} - Etheric Admin</title>
+    <link rel="stylesheet" href="/admin/admin-console.css">
+</head>
+<body>
+<div class="pf-c-page">
+    <header class="pf-c-masthead">
+        <div class="pf-c-masthead__brand"><span>Etheric</span> Admin Console</div>
+        <details class="pf-c-masthead__user">
+            <summary>{username}</summary>
+            <div class="pf-c-masthead__menu">
+                <form method="post" action="/admin/console/logout">
+                    <input type="hidden" name="csrf_token" value="{csrfToken}">
+                    <button type="submit">Sign out</button>
+                </form>
+            </div>
+        </details>
+    </header>
+    <div class="pf-c-page__main">
+        <nav class="pf-c-page__sidebar">
+            <div class="pf-c-nav__section-title">Manage</div>
+            <a class="pf-c-nav__link {#if navSection == 'clients'}active{/if}" href="/admin/console/clients">Clients</a>
+            <a class="pf-c-nav__link {#if navSection == 'users'}active{/if}" href="/admin/console/users">Users</a>
+        </nav>
+        <main class="pf-c-page__main-section">
+            {#if breadcrumbs.size > 0}
+            <nav class="pf-c-breadcrumb">
+                {#for crumb in breadcrumbs}
+                <span class="pf-c-breadcrumb__item">
+                    {#if crumb.href}
+                    <a href="{crumb.href}">{crumb.label}</a>
+                    {#else}
+                    {crumb.label}
+                    {/if}
+                </span>
+                {/for}
+            </nav>
+            {/if}
+            <h1 class="pf-c-title">{pageTitle}</h1>
+            {content.raw}
+        </main>
+    </div>
+</div>
+</body>
+</html>

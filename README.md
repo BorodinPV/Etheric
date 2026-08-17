@@ -10,8 +10,31 @@
 
 Требуется [Docker Desktop](https://www.docker.com/products/docker-desktop/) (или совместимый runtime).
 
+**Рекомендуемый способ (dev-профиль — docker compose стартует автоматически):**
+
+```bash
+./mvnw -Pdev quarkus:dev
+```
+
+Windows (PowerShell):
+
+```powershell
+.\scripts\dev.ps1
+```
+
+Linux/macOS:
+
+```bash
+./scripts/dev.sh
+```
+
+Maven-профиль `-Pdev` выполняет `docker compose up -d --wait` на фазе `initialize` перед запуском Quarkus.
+
+**Альтернатива — поднять контейнеры вручную:**
+
 ```bash
 docker compose up -d
+./mvnw quarkus:dev
 ```
 
 Сервисы:
@@ -26,7 +49,7 @@ docker compose up -d
 ### 2. Запуск сервера
 
 ```bash
-./mvnw quarkus:dev
+./mvnw -Pdev quarkus:dev
 ```
 
 Сервер: `http://localhost:8080`
@@ -38,8 +61,17 @@ docker compose up -d
 | Тип | Значение |
 |-----|----------|
 | Пользователь | `user` / `password` |
+| Admin Console | `admin` / `admin` (роль `admin`) |
 | Клиент | `test-client` / `secret` |
 | Admin API key (dev) | `dev-admin-key` |
+
+### Admin Console
+
+Keycloak-подобная веб-админка для управления клиентами и пользователями:
+
+- URL: [http://localhost:8080/admin/console](http://localhost:8080/admin/console)
+- Вход: username/password пользователя с ролью `admin` (dev seed: `admin` / `admin`)
+- JSON Admin API (`/admin/clients`, `/admin/users`) по-прежнему требует заголовок `X-Admin-Api-Key`
 
 > Клиенты и пользователи хранятся в **PostgreSQL**, сессии, коды и токены — в **Redis**.
 
@@ -61,11 +93,17 @@ docker compose up -d
 | `POST` | `/admin/clients` | Регистрация клиента |
 | `GET` | `/admin/clients` | Список клиентов |
 | `GET` | `/admin/clients/{client_id}` | Клиент по id |
+| `PUT` | `/admin/clients/{client_id}` | Обновление настроек клиента |
+| `PUT` | `/admin/clients/{client_id}/secret` | Регенерация client secret |
 | `POST` | `/admin/users` | Создание пользователя |
 | `GET` | `/admin/users` | Список пользователей |
 | `GET` | `/admin/users/{user_id}` | Пользователь по id |
 | `PUT` | `/admin/users/{user_id}` | Обновление email/roles/enabled |
 | `PUT` | `/admin/users/{user_id}/password` | Смена пароля |
+| `GET` | `/admin/console` | Admin Console (redirect → Clients) |
+| `GET`/`POST` | `/admin/console/login` | Вход в Admin Console |
+| `GET` | `/admin/console/clients` | Список клиентов (HTML) |
+| `GET` | `/admin/console/users` | Список пользователей (HTML) |
 | `GET` | `/health/live`, `/health/ready` | Health checks |
 
 ### Health
@@ -183,6 +221,26 @@ curl -s -X POST http://localhost:8080/admin/clients \
   "error_description": "Client not found"
 }
 ```
+
+### `PUT /admin/clients/{client_id}`
+
+Обновляет настройки клиента в PostgreSQL. Все поля опциональны, но хотя бы одно должно быть указано.
+
+| Поле | Описание |
+|------|----------|
+| `client_name` | Отображаемое имя |
+| `redirect_uris` | Список redirect URI |
+| `scopes` | Разрешённые scopes |
+| `grant_types` | Поддерживаемые grant types |
+| `enabled` | Активен ли клиент |
+| `client_logo` | URL логотипа |
+| `client_description` | Описание для экрана согласия |
+
+Ответ `200` — объект клиента **без** `client_secret`.
+
+### `PUT /admin/clients/{client_id}/secret`
+
+Генерирует новый `client_secret`, сохраняет bcrypt-хеш в БД. Ответ `200` содержит **новый секрет** (единственный раз, когда он виден). Старый секрет перестаёт работать сразу.
 
 ---
 
@@ -453,15 +511,15 @@ JSON на Token Endpoint / admin:
 
 ## Production
 
-Запуск в production-режиме:
+Запуск в production-режиме (внешние PostgreSQL и Redis через `ETHERIC_*`, **без** docker-compose):
 
 ```bash
-./mvnw package -DskipTests
+./mvnw package -Pprod -DskipTests
 java -Dquarkus.profile=prod -jar target/quarkus-app/quarkus-run.jar
 ```
 
 У packaged JAR профиль **`prod` включён по умолчанию** (если не задан `-Dquarkus.profile`).  
-Для dev используйте `./mvnw quarkus:dev` (профиль `%dev`).
+Для dev используйте `./mvnw -Pdev quarkus:dev` или `./scripts/dev.ps1` / `./scripts/dev.sh` (профиль `%dev`, auto-start docker-compose).
 
 ### Обязательные переменные окружения
 
@@ -499,7 +557,10 @@ export ETHERIC_CORS_ORIGINS=https://app.example.com
 При старте с `-Dquarkus.profile=prod` `ProductionConfigValidator` проверяет конфигурацию и **завершает процесс**, если:
 
 - admin API key равен `change-me-admin-key`;
-- CORS включён, а origins пусты или содержат `*`.
+- CORS включён, а origins пусты или содержат `*`;
+- PostgreSQL reactive URL указывает на `localhost` / `127.0.0.1`;
+- Redis URL указывает на `localhost` / `127.0.0.1`;
+- пароль БД равен dev-значению `etheric`.
 
 `DevSeedService` **не выполняется** в production — клиентов и пользователей регистрируйте через Admin API или миграции.
 
@@ -565,7 +626,7 @@ export ETHERIC_CORS_ORIGINS=https://app.example.com
 
 Требуется **Docker Desktop** (демон Docker должен быть запущен).
 
-При `mvn test` / `mvn package` Maven **автоматически** выполняет `docker compose up -d --wait` перед тестами (см. `exec-maven-plugin` в `pom.xml`). Отключить: `-DskipDockerCompose=true` (если контейнеры уже подняты вручную).
+При `mvn test` / `mvn package` Maven **автоматически** выполняет `docker compose up -d --wait` перед тестами и **останавливает контейнеры после завершения** тестового прогона (`DockerComposeShutdownListener`, в том числе при падении тестов). Отключить: `-DskipDockerCompose=true` (если контейнеры уже подняты вручную).
 
 ```bash
 ./mvnw test

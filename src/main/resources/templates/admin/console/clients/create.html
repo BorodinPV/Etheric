@@ -1,0 +1,42 @@
+{#if error}
+<div class="pf-c-alert pf-m-danger">{error}</div>
+{/if}
+
+<form method="post" action="/admin/console/clients/create">
+    <input type="hidden" name="csrf_token" value="{csrfToken}">
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="client_id">Client ID</label>
+        <input class="pf-c-form-control" type="text" id="client_id" name="client_id" placeholder="Leave blank to auto-generate">
+    </div>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="client_name">Name *</label>
+        <input class="pf-c-form-control" type="text" id="client_name" name="client_name" required>
+    </div>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="redirect_uris">Redirect URIs *</label>
+        <textarea class="pf-c-form-control" id="redirect_uris" name="redirect_uris" required placeholder="One URI per line"></textarea>
+        <div class="pf-c-form__helper">One redirect URI per line</div>
+    </div>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="scopes">Scopes</label>
+        <input class="pf-c-form-control" type="text" id="scopes" name="scopes" value="openid profile email">
+        <div class="pf-c-form__helper">Space or comma separated</div>
+    </div>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="grant_types">Grant types</label>
+        <input class="pf-c-form-control" type="text" id="grant_types" name="grant_types" value="authorization_code refresh_token">
+    </div>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="client_description">Description</label>
+        <input class="pf-c-form-control" type="text" id="client_description" name="client_description">
+    </div>
+
+    <button class="pf-c-button pf-m-primary" type="submit">Create</button>
+    <a class="pf-c-button pf-m-secondary" href="/admin/console/clients" style="margin-left:8px">Cancel</a>
+</form>

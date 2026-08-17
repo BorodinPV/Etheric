@@ -57,6 +57,7 @@
 - **Production startup validation** — `ProductionConfigValidator` (профиль `prod`): блокирует дефолтный admin key и небезопасный CORS
 - **Dev seed отключён в prod** — `DevSeedService` только в профилях `dev` / `test`
 - **Admin User API** — `/admin/users` (CRUD профиля, смена пароля)
+- **Admin Console** — `/admin/console` (Keycloak-style UI: Clients/Users, username/password + роль `admin`, cookie `ADMIN_SESSION`)
 - **Integration Guide** — [`docs/IntegrationGuide.md`](IntegrationGuide.md) для разработчиков клиентских приложений
 - **Quarkus REST** — `quarkus-rest` / `quarkus-rest-jackson` (миграция с RESTEasy Reactive)
 

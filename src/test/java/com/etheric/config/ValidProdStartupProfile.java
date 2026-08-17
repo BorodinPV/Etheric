@@ -16,6 +16,7 @@ public class ValidProdStartupProfile implements QuarkusTestProfile {
     @Override
     public Map<String, String> getConfigOverrides() {
         return Map.ofEntries(
+                entry("etheric.production-config.validate-infrastructure", "false"),
                 entry("etheric.admin.api-key", "prod-test-secret-key"),
                 entry("quarkus.http.cors", "false"),
                 entry("quarkus.datasource.devservices.enabled", "false"),

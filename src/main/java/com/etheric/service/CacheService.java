@@ -89,6 +89,30 @@ public class CacheService {
         return delete("auth:session:" + sessionId);
     }
 
+    public Uni<Void> saveAdminSession(String sessionId, AdminSessionData data, long ttlSeconds) {
+        return set("admin:session:" + sessionId, data, ttlSeconds);
+    }
+
+    public Uni<AdminSessionData> getAdminSession(String sessionId) {
+        return get("admin:session:" + sessionId, AdminSessionData.class);
+    }
+
+    public Uni<Void> deleteAdminSession(String sessionId) {
+        return delete("admin:session:" + sessionId);
+    }
+
+    public Uni<Void> saveAdminFlash(String sessionId, AdminFlashData data, long ttlSeconds) {
+        return set("admin:flash:" + sessionId, data, ttlSeconds);
+    }
+
+    public Uni<AdminFlashData> getAdminFlash(String sessionId) {
+        return get("admin:flash:" + sessionId, AdminFlashData.class);
+    }
+
+    public Uni<Void> deleteAdminFlash(String sessionId) {
+        return delete("admin:flash:" + sessionId);
+    }
+
     public Uni<Void> saveAuthorizationRequestState(String state, AuthorizationRequestState data, long ttlSeconds) {
         return set("auth:request:" + state, data, ttlSeconds);
     }

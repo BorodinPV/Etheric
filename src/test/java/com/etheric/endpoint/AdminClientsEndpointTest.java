@@ -169,4 +169,86 @@ class AdminClientsEndpointTest {
             .statusCode(404)
             .body("error", equalTo("not_found"));
     }
+
+    @Test
+    void update_changesClientSettings() {
+        String clientId = "update-client-" + System.nanoTime();
+        given()
+            .contentType(ContentType.JSON)
+            .header("X-Admin-Api-Key", ADMIN_KEY)
+            .body(Map.of(
+                "client_id", clientId,
+                "client_name", "Before Update",
+                "redirect_uris", List.of("http://localhost:8080/callback")
+            ))
+        .when()
+            .post("/admin/clients")
+        .then()
+            .statusCode(201);
+
+        given()
+            .contentType(ContentType.JSON)
+            .header("X-Admin-Api-Key", ADMIN_KEY)
+            .body(Map.of(
+                "client_name", "After Update",
+                "redirect_uris", List.of("http://localhost:8080/callback", "http://localhost:3000/cb"),
+                "scopes", List.of("openid", "profile"),
+                "grant_types", List.of("authorization_code"),
+                "enabled", false,
+                "client_description", "Updated description"
+            ))
+        .when()
+            .put("/admin/clients/" + clientId)
+        .then()
+            .statusCode(200)
+            .body("client_name", equalTo("After Update"))
+            .body("redirect_uris", hasItems("http://localhost:8080/callback", "http://localhost:3000/cb"))
+            .body("scopes", equalTo(List.of("openid", "profile")))
+            .body("grant_types", equalTo(List.of("authorization_code")))
+            .body("enabled", equalTo(false))
+            .body("client_description", equalTo("Updated description"));
+    }
+
+    @Test
+    void update_unknownClient_returnsNotFound() {
+        given()
+            .contentType(ContentType.JSON)
+            .header("X-Admin-Api-Key", ADMIN_KEY)
+            .body(Map.of("client_name", "Ghost"))
+        .when()
+            .put("/admin/clients/does-not-exist")
+        .then()
+            .statusCode(404)
+            .body("error", equalTo("not_found"));
+    }
+
+    @Test
+    void regenerateSecret_returnsNewSecret() {
+        String clientId = "secret-client-" + System.nanoTime();
+        String originalSecret = given()
+            .contentType(ContentType.JSON)
+            .header("X-Admin-Api-Key", ADMIN_KEY)
+            .body(Map.of(
+                "client_id", clientId,
+                "client_name", "Secret Test",
+                "redirect_uris", List.of("http://localhost:8080/callback")
+            ))
+        .when()
+            .post("/admin/clients")
+        .then()
+            .statusCode(201)
+            .extract().path("client_secret");
+
+        String newSecret = given()
+            .header("X-Admin-Api-Key", ADMIN_KEY)
+        .when()
+            .put("/admin/clients/" + clientId + "/secret")
+        .then()
+            .statusCode(200)
+            .body("client_id", equalTo(clientId))
+            .body("client_secret", notNullValue())
+            .extract().path("client_secret");
+
+        org.junit.jupiter.api.Assertions.assertNotEquals(originalSecret, newSecret);
+    }
 }

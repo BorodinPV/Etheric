@@ -1,0 +1,35 @@
+<div class="pf-c-toolbar">
+    <form class="pf-c-search" method="get" action="/admin/console/clients">
+        <input class="pf-c-form-control" type="search" name="search" value="{search}" placeholder="Search clients...">
+    </form>
+    <a class="pf-c-button pf-m-primary" href="/admin/console/clients/create">Create client</a>
+</div>
+
+{#if clients.isEmpty()}
+<div class="pf-c-empty">No clients found.</div>
+{#else}
+<table class="pf-c-table">
+    <thead>
+    <tr>
+        <th>Client ID</th>
+        <th>Name</th>
+        <th>Enabled</th>
+    </tr>
+    </thead>
+    <tbody>
+    {#for client in clients}
+    <tr>
+        <td><a href="/admin/console/clients/{client.clientId}/settings">{client.clientId}</a></td>
+        <td>{client.clientName}</td>
+        <td>
+            {#if client.enabled}
+            <span class="pf-c-badge pf-m-success">Yes</span>
+            {#else}
+            <span class="pf-c-badge pf-m-danger">No</span>
+            {/if}
+        </td>
+    </tr>
+    {/for}
+    </tbody>
+</table>
+{/if}
