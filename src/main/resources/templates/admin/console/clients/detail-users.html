@@ -11,15 +11,18 @@
 <div class="pf-c-alert pf-m-danger">{error}</div>
 {/if}
 
-<p>{i18n.get('client.users.hint')}</p>
-
 <form method="post" action="/admin/console/clients/{clientId}/users">
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
-    {#if assignments.isEmpty()}
-    <p>{i18n.get('client.users.noUsers')}</p>
-    {#else}
     <div class="pf-c-form__group">
+        <div class="pf-c-form__label pf-c-form__label--with-hint">
+            <span>{i18n.get('tab.users')}</span>
+            {#include admin/console/field-hint text=i18n.get('hint.client.usersMembership') /}
+        </div>
+
+        {#if assignments.isEmpty()}
+        <p>{i18n.get('client.users.noUsers')}</p>
+        {#else}
         {#for item in assignments}
         <div class="pf-c-checkbox">
             <label>
@@ -28,8 +31,8 @@
             </label>
         </div>
         {/for}
+        {/if}
     </div>
-    {/if}
 
     <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.save')}</button>
 </form>

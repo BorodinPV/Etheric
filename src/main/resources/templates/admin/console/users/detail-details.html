@@ -15,22 +15,35 @@
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label">{i18n.get('common.username')}</label>
+        <label class="pf-c-form__label pf-c-form__label--with-hint">
+            <span>{i18n.get('common.username')}</span>
+            {#include admin/console/field-hint text=i18n.get('hint.common.username') /}
+        </label>
         <input class="pf-c-form-control" type="text" value="{user.username}" disabled>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="email">{i18n.get('common.email')}</label>
+        <label class="pf-c-form__label pf-c-form__label--with-hint" for="email">
+            <span>{i18n.get('common.email')}</span>
+            {#include admin/console/field-hint text=i18n.get('hint.common.email') /}
+        </label>
         <input class="pf-c-form-control" type="email" id="email" name="email" value="{user.email}">
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="roles">{i18n.get('common.roles')}</label>
+        <label class="pf-c-form__label pf-c-form__label--with-hint" for="roles">
+            <span>{i18n.get('common.roles')}</span>
+            {#include admin/console/field-hint text=i18n.get('hint.common.roles') /}
+        </label>
         <input class="pf-c-form-control" type="text" id="roles" name="roles" value="{#for r in user.roles}{r} {/for}">
     </div>
 
     <div class="pf-c-form__group pf-c-checkbox">
-        <label><input type="checkbox" name="enabled" {#if user.enabled}checked{/if}> {i18n.get('common.enabled')}</label>
+        <label class="pf-c-form__label--with-hint">
+            <input type="checkbox" name="enabled" {#if user.enabled}checked{/if}>
+            <span>{i18n.get('common.enabled')}</span>
+            {#include admin/console/field-hint text=i18n.get('hint.common.enabled') /}
+        </label>
     </div>
 
     <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.save')}</button>

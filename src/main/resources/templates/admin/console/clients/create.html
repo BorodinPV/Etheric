@@ -6,34 +6,50 @@
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="client_id">{i18n.get('common.clientId')}</label>
+        <label class="pf-c-form__label pf-c-form__label--with-hint" for="client_id">
+            <span>{i18n.get('common.clientId')}</span>
+            {#include admin/console/field-hint text=i18n.get('hint.common.clientId') /}
+        </label>
         <input class="pf-c-form-control" type="text" id="client_id" name="client_id" placeholder="{i18n.get('client.create.placeholderClientId')}">
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="client_name">{i18n.get('common.name')} *</label>
+        <label class="pf-c-form__label pf-c-form__label--with-hint" for="client_name">
+            <span>{i18n.get('common.name')} *</span>
+            {#include admin/console/field-hint text=i18n.get('hint.common.name') /}
+        </label>
         <input class="pf-c-form-control" type="text" id="client_name" name="client_name" required>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="redirect_uris">{i18n.get('client.settings.redirectUris')} *</label>
+        <label class="pf-c-form__label pf-c-form__label--with-hint" for="redirect_uris">
+            <span>{i18n.get('client.settings.redirectUris')} *</span>
+            {#include admin/console/field-hint text=i18n.get('hint.client.redirectUris') /}
+        </label>
         <textarea class="pf-c-form-control" id="redirect_uris" name="redirect_uris" required placeholder="{i18n.get('client.create.placeholderRedirectUris')}"></textarea>
-        <div class="pf-c-form__helper">{i18n.get('common.helper.oneUriPerLine')}</div>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="scopes">{i18n.get('common.scopes')}</label>
+        <label class="pf-c-form__label pf-c-form__label--with-hint" for="scopes">
+            <span>{i18n.get('common.scopes')}</span>
+            {#include admin/console/field-hint text=i18n.get('hint.common.scopes') /}
+        </label>
         <input class="pf-c-form-control" type="text" id="scopes" name="scopes" value="openid profile email">
-        <div class="pf-c-form__helper">{i18n.get('common.helper.spaceCommaSeparated')}</div>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="grant_types">{i18n.get('common.grantTypes')}</label>
+        <label class="pf-c-form__label pf-c-form__label--with-hint" for="grant_types">
+            <span>{i18n.get('common.grantTypes')}</span>
+            {#include admin/console/field-hint text=i18n.get('hint.common.grantTypes') /}
+        </label>
         <input class="pf-c-form-control" type="text" id="grant_types" name="grant_types" value="authorization_code refresh_token">
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="client_description">{i18n.get('common.description')}</label>
+        <label class="pf-c-form__label pf-c-form__label--with-hint" for="client_description">
+            <span>{i18n.get('common.description')}</span>
+            {#include admin/console/field-hint text=i18n.get('hint.common.description') /}
+        </label>
         <input class="pf-c-form-control" type="text" id="client_description" name="client_description">
     </div>
 
