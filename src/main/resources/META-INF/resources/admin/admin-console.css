@@ -53,6 +53,46 @@ a:hover { text-decoration: underline; }
 
 .pf-c-masthead__brand span { color: #73bcf7; }
 
+.pf-c-masthead__actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.pf-c-locale-switcher {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.pf-c-locale-switcher--center {
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.pf-c-locale-switcher__link {
+    color: var(--pf-global--Color--200);
+    text-decoration: none;
+    padding: 4px 6px;
+    border-radius: 4px;
+}
+
+.pf-c-locale-switcher__link:hover {
+    color: #fff;
+    text-decoration: none;
+}
+
+.pf-c-locale-switcher__link.active {
+    color: #73bcf7;
+    font-weight: 600;
+}
+
+.pf-c-locale-switcher__sep {
+    color: var(--pf-global--BorderColor--100);
+    user-select: none;
+}
+
 .pf-c-masthead__user {
     position: relative;
 }

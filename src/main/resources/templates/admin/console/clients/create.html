@@ -6,37 +6,37 @@
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="client_id">Client ID</label>
-        <input class="pf-c-form-control" type="text" id="client_id" name="client_id" placeholder="Leave blank to auto-generate">
+        <label class="pf-c-form__label" for="client_id">{i18n.get('common.clientId')}</label>
+        <input class="pf-c-form-control" type="text" id="client_id" name="client_id" placeholder="{i18n.get('client.create.placeholderClientId')}">
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="client_name">Name *</label>
+        <label class="pf-c-form__label" for="client_name">{i18n.get('common.name')} *</label>
         <input class="pf-c-form-control" type="text" id="client_name" name="client_name" required>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="redirect_uris">Redirect URIs *</label>
-        <textarea class="pf-c-form-control" id="redirect_uris" name="redirect_uris" required placeholder="One URI per line"></textarea>
-        <div class="pf-c-form__helper">One redirect URI per line</div>
+        <label class="pf-c-form__label" for="redirect_uris">{i18n.get('client.settings.redirectUris')} *</label>
+        <textarea class="pf-c-form-control" id="redirect_uris" name="redirect_uris" required placeholder="{i18n.get('client.create.placeholderRedirectUris')}"></textarea>
+        <div class="pf-c-form__helper">{i18n.get('common.helper.oneUriPerLine')}</div>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="scopes">Scopes</label>
+        <label class="pf-c-form__label" for="scopes">{i18n.get('common.scopes')}</label>
         <input class="pf-c-form-control" type="text" id="scopes" name="scopes" value="openid profile email">
-        <div class="pf-c-form__helper">Space or comma separated</div>
+        <div class="pf-c-form__helper">{i18n.get('common.helper.spaceCommaSeparated')}</div>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="grant_types">Grant types</label>
+        <label class="pf-c-form__label" for="grant_types">{i18n.get('common.grantTypes')}</label>
         <input class="pf-c-form-control" type="text" id="grant_types" name="grant_types" value="authorization_code refresh_token">
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="client_description">Description</label>
+        <label class="pf-c-form__label" for="client_description">{i18n.get('common.description')}</label>
         <input class="pf-c-form-control" type="text" id="client_description" name="client_description">
     </div>
 
-    <button class="pf-c-button pf-m-primary" type="submit">Create</button>
-    <a class="pf-c-button pf-m-secondary" href="/admin/console/clients" style="margin-left:8px">Cancel</a>
+    <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.create')}</button>
+    <a class="pf-c-button pf-m-secondary" href="/admin/console/clients" style="margin-left:8px">{i18n.get('common.cancel')}</a>
 </form>

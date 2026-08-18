@@ -157,6 +157,37 @@ class AdminConsolePagesTest {
         given().get("/admin/admin-console.css").then().statusCode(200);
     }
 
+    @Test
+    void russianLocale_rendersTranslatedUi() {
+        AuthenticatedSession auth = loginAsAdmin();
+
+        given()
+                .cookie("ADMIN_SESSION", auth.sessionId())
+                .cookie("ADMIN_LOCALE", "ru")
+                .redirects().follow(false)
+                .get("/admin/console/locale?lang=ru")
+                .then()
+                .statusCode(303)
+                .header("Set-Cookie", containsString("ADMIN_LOCALE=ru"));
+
+        given()
+                .cookie("ADMIN_SESSION", auth.sessionId())
+                .cookie("ADMIN_LOCALE", "ru")
+                .get("/admin/console/clients")
+                .then()
+                .statusCode(200)
+                .body(containsString("Клиенты"))
+                .body(containsString("Создать клиента"));
+
+        given()
+                .cookie("ADMIN_LOCALE", "ru")
+                .get("/admin/console/login")
+                .then()
+                .statusCode(200)
+                .body(containsString("Вход в аккаунт"))
+                .body(containsString("Русский"));
+    }
+
     private AuthenticatedSession loginAsAdmin() {
         Response loginPage = given().get("/admin/console/login");
         String challengeId = extractCookie(loginPage.getHeader("Set-Cookie"));

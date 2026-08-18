@@ -150,9 +150,10 @@ public class AdminClientService {
         });
     }
 
-    public Uni<AdminServiceResult<ClientRegistrationResponse>> updateTokenLifetimes(
+    public Uni<AdminServiceResult<ClientRegistrationResponse>> updateOAuthSettings(
             String clientId, Integer accessTokenLifetimeSeconds,
-            Integer refreshTokenLifetimeSeconds, Integer sessionLifetimeSeconds) {
+            Integer refreshTokenLifetimeSeconds, Integer sessionLifetimeSeconds,
+            String sessionCookieName, Boolean sessionCookieSecure) {
         if (accessTokenLifetimeSeconds != null && accessTokenLifetimeSeconds <= 0) {
             return Uni.createFrom().item(AdminServiceResult.badRequest(
                     "invalid_request", "access_token_lifetime_seconds must be positive"));
@@ -165,6 +166,10 @@ public class AdminClientService {
             return Uni.createFrom().item(AdminServiceResult.badRequest(
                     "invalid_request", "session_lifetime_seconds must be positive"));
         }
+        String cookieNameError = TokenPolicyService.validateCookieName(sessionCookieName);
+        if (cookieNameError != null) {
+            return Uni.createFrom().item(AdminServiceResult.badRequest("invalid_request", cookieNameError));
+        }
 
         return clientRepository.findByClientId(clientId).flatMap(opt -> {
             if (opt.isEmpty()) {
@@ -174,10 +179,20 @@ public class AdminClientService {
             client.accessTokenLifetimeSeconds = accessTokenLifetimeSeconds;
             client.refreshTokenLifetimeSeconds = refreshTokenLifetimeSeconds;
             client.sessionLifetimeSeconds = sessionLifetimeSeconds;
+            client.sessionCookieName = TokenPolicyService.normalizeOptionalCookieName(sessionCookieName);
+            client.sessionCookieSecure = sessionCookieSecure;
             return clientRepository.updateClient(client)
                     .flatMap(ignored -> clientRepository.findByClientId(clientId))
                     .map(updated -> AdminServiceResult.ok(toResponse(updated.orElseThrow(), null)));
         });
+    }
+
+    /** @deprecated Use {@link #updateOAuthSettings} */
+    public Uni<AdminServiceResult<ClientRegistrationResponse>> updateTokenLifetimes(
+            String clientId, Integer accessTokenLifetimeSeconds,
+            Integer refreshTokenLifetimeSeconds, Integer sessionLifetimeSeconds) {
+        return updateOAuthSettings(clientId, accessTokenLifetimeSeconds, refreshTokenLifetimeSeconds,
+                sessionLifetimeSeconds, null, null);
     }
 
     public Uni<AdminServiceResult<ClientRegistrationResponse>> regenerateSecret(String clientId) {
@@ -198,6 +213,6 @@ public class AdminClientService {
                 client.clientId, plaintextSecret, client.clientName, client.redirectUris,
                 client.scopes, client.grantTypes, client.enabled, client.clientDescription,
                 client.accessTokenLifetimeSeconds, client.refreshTokenLifetimeSeconds,
-                client.sessionLifetimeSeconds);
+                client.sessionLifetimeSeconds, client.sessionCookieName, client.sessionCookieSecure);
     }
 }

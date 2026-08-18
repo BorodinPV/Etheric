@@ -45,4 +45,10 @@ public class ClientRegistrationResponse {
 
     @JsonProperty("session_lifetime_seconds")
     private Integer sessionLifetimeSeconds;
+
+    @JsonProperty("session_cookie_name")
+    private String sessionCookieName;
+
+    @JsonProperty("session_cookie_secure")
+    private Boolean sessionCookieSecure;
 }

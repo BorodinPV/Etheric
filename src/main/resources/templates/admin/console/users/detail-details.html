@@ -1,7 +1,7 @@
 <div class="pf-c-tabs">
-    <a class="pf-c-tabs__link {#if activeTab == 'details'}active{/if}" href="/admin/console/users/{userId}/details">Details</a>
-    <a class="pf-c-tabs__link {#if activeTab == 'credentials'}active{/if}" href="/admin/console/users/{userId}/credentials">Credentials</a>
-    <a class="pf-c-tabs__link {#if activeTab == 'clients'}active{/if}" href="/admin/console/users/{userId}/clients">Clients</a>
+    <a class="pf-c-tabs__link {#if activeTab == 'details'}active{/if}" href="/admin/console/users/{userId}/details">{i18n.get('tab.details')}</a>
+    <a class="pf-c-tabs__link {#if activeTab == 'credentials'}active{/if}" href="/admin/console/users/{userId}/credentials">{i18n.get('tab.credentials')}</a>
+    <a class="pf-c-tabs__link {#if activeTab == 'clients'}active{/if}" href="/admin/console/users/{userId}/clients">{i18n.get('tab.clients')}</a>
 </div>
 
 {#if success}
@@ -15,23 +15,23 @@
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label">Username</label>
+        <label class="pf-c-form__label">{i18n.get('common.username')}</label>
         <input class="pf-c-form-control" type="text" value="{user.username}" disabled>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="email">Email</label>
+        <label class="pf-c-form__label" for="email">{i18n.get('common.email')}</label>
         <input class="pf-c-form-control" type="email" id="email" name="email" value="{user.email}">
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="roles">Roles</label>
+        <label class="pf-c-form__label" for="roles">{i18n.get('common.roles')}</label>
         <input class="pf-c-form-control" type="text" id="roles" name="roles" value="{#for r in user.roles}{r} {/for}">
     </div>
 
     <div class="pf-c-form__group pf-c-checkbox">
-        <label><input type="checkbox" name="enabled" {#if user.enabled}checked{/if}> Enabled</label>
+        <label><input type="checkbox" name="enabled" {#if user.enabled}checked{/if}> {i18n.get('common.enabled')}</label>
     </div>
 
-    <button class="pf-c-button pf-m-primary" type="submit">Save</button>
+    <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.save')}</button>
 </form>

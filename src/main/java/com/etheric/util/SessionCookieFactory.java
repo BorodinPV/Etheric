@@ -1,9 +1,13 @@
 package com.etheric.util;
 
+import com.etheric.model.ClientOAuthPolicy;
 import com.etheric.service.TokenPolicyService;
+import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.HttpHeaders;
+
+import java.util.List;
 
 /**
  * Builds and parses session cookies for browser-based OAuth flows.
@@ -15,26 +19,62 @@ public class SessionCookieFactory {
     TokenPolicyService tokenPolicyService;
 
     public String create(String sessionId) {
-        return build(sessionId, null);
+        return create(sessionId, tokenPolicyService.defaultOAuthPolicy());
+    }
+
+    public String create(String sessionId, ClientOAuthPolicy policy) {
+        return build(sessionId, null, policy);
     }
 
     public String clear() {
-        return build("", 0);
+        return clear(tokenPolicyService.defaultOAuthPolicy());
     }
 
+    public String clear(ClientOAuthPolicy policy) {
+        return build("", 0, policy);
+    }
+
+    public Uni<List<String>> clearAllKnown() {
+        return tokenPolicyService.knownOAuthPolicies()
+                .map(policies -> policies.stream().map(this::clear).toList());
+    }
+
+    /** @deprecated Prefer {@link #cookieName(ClientOAuthPolicy)} */
     public String cookieName() {
-        return tokenPolicyService.oauthSessionCookieName();
+        return tokenPolicyService.defaultOAuthPolicy().getSessionCookieName();
     }
 
-    /**
-     * Reads the session id from the Cookie header, if present.
-     */
+    public String cookieName(ClientOAuthPolicy policy) {
+        return policy.getSessionCookieName();
+    }
+
     public String extractSessionId(HttpHeaders headers) {
-        return extractSessionIdFromCookie(headers.getHeaderString("Cookie"));
+        return extractSessionId(headers, tokenPolicyService.defaultOAuthPolicy());
+    }
+
+    public String extractSessionId(HttpHeaders headers, ClientOAuthPolicy policy) {
+        return extractSessionIdFromCookie(headers.getHeaderString("Cookie"), policy);
+    }
+
+    public Uni<String> extractSessionIdAny(HttpHeaders headers) {
+        return tokenPolicyService.knownOAuthPolicies().map(policies -> {
+            String cookieHeader = headers.getHeaderString("Cookie");
+            for (ClientOAuthPolicy policy : policies) {
+                String sessionId = extractSessionIdFromCookie(cookieHeader, policy);
+                if (sessionId != null) {
+                    return sessionId;
+                }
+            }
+            return null;
+        });
     }
 
     public String extractSessionIdFromCookie(String cookieHeader) {
-        String name = tokenPolicyService.oauthSessionCookieName();
+        return extractSessionIdFromCookie(cookieHeader, tokenPolicyService.defaultOAuthPolicy());
+    }
+
+    public String extractSessionIdFromCookie(String cookieHeader, ClientOAuthPolicy policy) {
+        String name = policy.getSessionCookieName();
         if (cookieHeader == null || !cookieHeader.contains(name + "=")) {
             return null;
         }
@@ -46,15 +86,15 @@ public class SessionCookieFactory {
         return value.isEmpty() ? null : value;
     }
 
-    private String build(String value, Integer maxAge) {
-        String name = tokenPolicyService.oauthSessionCookieName();
+    private String build(String value, Integer maxAge, ClientOAuthPolicy policy) {
+        String name = policy.getSessionCookieName();
         StringBuilder cookie = new StringBuilder();
         cookie.append(name).append('=').append(value);
         cookie.append("; Path=/; HttpOnly; SameSite=Lax");
         if (maxAge != null) {
             cookie.append("; Max-Age=").append(maxAge);
         }
-        if (tokenPolicyService.sessionCookieSecure()) {
+        if (policy.isSessionCookieSecure()) {
             cookie.append("; Secure");
         }
         return cookie.toString();

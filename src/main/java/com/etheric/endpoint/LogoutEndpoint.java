@@ -11,12 +11,13 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.*;
 
 import java.net.URI;
+import java.util.List;
 
 /**
  * Session logout ({@code GET /logout}).
  * <p>
  * Optional {@code redirect_uri} query param (must be a registered client redirect URI).
- * Deletes session and clears {@code SESSIONID} cookie; {@code 302} to target URI or {@code /}.
+ * Clears the OAuth session cookie and {@code 302} to target URI or {@code /}.
  */
 @Path("/logout")
 public class LogoutEndpoint {
@@ -32,16 +33,22 @@ public class LogoutEndpoint {
 
     @GET
     public Uni<Response> logout(@QueryParam("redirect_uri") String redirectUri, @Context HttpHeaders headers) {
-        String sessionId = sessionCookieFactory.extractSessionId(headers);
+        return sessionCookieFactory.extractSessionIdAny(headers).flatMap(sessionId -> {
+            Uni<Void> deleteSession = sessionId != null
+                    ? cacheService.deleteSession(sessionId)
+                    : Uni.createFrom().voidItem();
+            return deleteSession.flatMap(v -> resolveRedirectTarget(redirectUri))
+                    .flatMap(target -> sessionCookieFactory.clearAllKnown()
+                            .map(clearCookies -> buildLogoutResponse(target, clearCookies)));
+        });
+    }
 
-        Uni<Void> deleteSession = sessionId != null
-                ? cacheService.deleteSession(sessionId)
-                : Uni.createFrom().voidItem();
-
-        return deleteSession.flatMap(v -> resolveRedirectTarget(redirectUri))
-                .map(target -> Response.seeOther(target)
-                        .header("Set-Cookie", sessionCookieFactory.clear())
-                        .build());
+    private Response buildLogoutResponse(URI target, List<String> clearCookies) {
+        Response.ResponseBuilder response = Response.seeOther(target);
+        for (String clearCookie : clearCookies) {
+            response.header("Set-Cookie", clearCookie);
+        }
+        return response.build();
     }
 
     private Uni<URI> resolveRedirectTarget(String redirectUri) {

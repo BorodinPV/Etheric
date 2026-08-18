@@ -2,6 +2,7 @@ package com.etheric.endpoint;
 
 import com.etheric.config.EthericTtlConfig;
 import com.etheric.service.TokenPolicyService;
+import com.etheric.model.ClientOAuthPolicy;
 import com.etheric.model.SessionData;
 import com.etheric.repository.UserRepository;
 import com.etheric.exception.OAuthError;
@@ -56,22 +57,24 @@ public class LoginEndpoint {
     @GET
     @Produces(MediaType.TEXT_HTML)
     public Uni<Response> getLogin(@QueryParam("state") String state, @Context HttpHeaders headers) {
-        String sessionId = sessionCookieFactory.extractSessionId(headers);
-        if (sessionId != null) {
-            return cacheService.getSession(sessionId).flatMap(session -> {
-                if (session != null) {
-                    return renderLoginPage(sessionId, session, state, false);
-                }
-                return createAnonymousSession(state);
-            }).onFailure().recoverWithUni(e -> createAnonymousSession(state));
-        }
-        return createAnonymousSession(state);
+        return resolveOAuthPolicy(state).flatMap(policy -> {
+            String sessionId = sessionCookieFactory.extractSessionId(headers, policy);
+            if (sessionId != null) {
+                return cacheService.getSession(sessionId).flatMap(session -> {
+                    if (session != null) {
+                        return renderLoginPage(sessionId, session, state, policy, false);
+                    }
+                    return createAnonymousSession(state, policy);
+                }).onFailure().recoverWithUni(e -> createAnonymousSession(state, policy));
+            }
+            return createAnonymousSession(state, policy);
+        });
     }
 
-    private Uni<Response> createAnonymousSession(String state) {
+    private Uni<Response> createAnonymousSession(String state, ClientOAuthPolicy policy) {
         String sessionId = UUID.randomUUID().toString();
         SessionData session = new SessionData(null, null, System.currentTimeMillis());
-        return renderLoginPage(sessionId, session, state, true);
+        return renderLoginPage(sessionId, session, state, policy, true);
     }
 
     @POST
@@ -83,76 +86,65 @@ public class LoginEndpoint {
             @FormParam("csrf_token") String csrfToken,
             @Context HttpHeaders headers) {
 
-        String sessionId = sessionCookieFactory.extractSessionId(headers);
-        if (sessionId == null) {
-            return Uni.createFrom().item(Response.status(Response.Status.FORBIDDEN)
-                    .entity("Invalid CSRF token").build());
-        }
-
-        return cacheService.getSession(sessionId).flatMap(session -> {
-            if (session == null || csrfToken == null || !csrfToken.equals(session.getCsrfToken())) {
+        return resolveOAuthPolicy(state).flatMap(policy -> {
+            String sessionId = sessionCookieFactory.extractSessionId(headers, policy);
+            if (sessionId == null) {
                 return Uni.createFrom().item(Response.status(Response.Status.FORBIDDEN)
                         .entity("Invalid CSRF token").build());
             }
-            return userRepository.authenticate(username, password).flatMap(userOpt -> {
-                if (userOpt.isEmpty()) {
-                    return renderLoginError(sessionId, session, state);
+
+            return cacheService.getSession(sessionId).flatMap(session -> {
+                if (session == null || csrfToken == null || !csrfToken.equals(session.getCsrfToken())) {
+                    return Uni.createFrom().item(Response.status(Response.Status.FORBIDDEN)
+                            .entity("Invalid CSRF token").build());
                 }
-                return handleSuccessfulLogin(userOpt.get().id.toString(), state);
+                return userRepository.authenticate(username, password).flatMap(userOpt -> {
+                    if (userOpt.isEmpty()) {
+                        return renderLoginError(sessionId, session, state, policy);
+                    }
+                    return handleSuccessfulLogin(userOpt.get().id.toString(), state, policy);
+                });
             });
         });
     }
 
-    private Uni<Response> renderLoginError(String sessionId, SessionData session, String state) {
+    private Uni<Response> renderLoginError(String sessionId, SessionData session, String state,
+                                           ClientOAuthPolicy policy) {
         String newCsrfToken = UUID.randomUUID().toString();
         session.setCsrfToken(newCsrfToken);
-        return resolveSessionLifetime(state).flatMap(sessionLifetime ->
-                cacheService.saveSession(sessionId, session, sessionLifetime)
-                        .replaceWith(buildLoginResponse(sessionId, state, newCsrfToken,
-                                "Неверное имя пользователя или пароль", false)));
+        return cacheService.saveSession(sessionId, session, policy.getSessionLifetimeSeconds())
+                .replaceWith(buildLoginResponse(sessionId, state, newCsrfToken,
+                        "Неверное имя пользователя или пароль", false, policy));
     }
 
-    private Uni<Response> handleSuccessfulLogin(String userId, String state) {
+    private Uni<Response> handleSuccessfulLogin(String userId, String state, ClientOAuthPolicy policy) {
         String newSessionId = UUID.randomUUID().toString();
-        return resolveSessionLifetime(state).flatMap(sessionLifetime ->
-                cacheService.saveSession(newSessionId,
-                                new SessionData(userId, null, System.currentTimeMillis()), sessionLifetime)
-                        .flatMap(v -> {
-                            if (state == null) {
-                                return Uni.createFrom().voidItem();
-                            }
-                            return cacheService.getAuthorizationRequestState(state).flatMap(requestState -> {
-                                if (requestState == null) {
-                                    return Uni.createFrom().voidItem();
-                                }
-                                requestState.setUserId(userId);
-                                return cacheService.saveAuthorizationRequestState(state, requestState,
-                                        ttlConfig.requestStateLifetime()).replaceWithVoid();
-                            });
-                        })
-                        .flatMap(v -> resolvePostLoginRedirect(newSessionId, userId, state)));
-    }
-
-    private Uni<Long> resolveSessionLifetime(String state) {
-        if (state == null) {
-            return Uni.createFrom().item(tokenPolicyService.oauthSessionLifetimeSeconds());
-        }
-        return cacheService.getAuthorizationRequestState(state)
-                .flatMap(requestState -> {
-                    if (requestState == null) {
-                        return Uni.createFrom().item(tokenPolicyService.oauthSessionLifetimeSeconds());
+        return cacheService.saveSession(newSessionId,
+                        new SessionData(userId, null, System.currentTimeMillis()), policy.getSessionLifetimeSeconds())
+                .flatMap(v -> {
+                    if (state == null) {
+                        return Uni.createFrom().voidItem();
                     }
-                    return tokenPolicyService.resolveSessionLifetimeForClient(requestState.getClientId());
-                });
+                    return cacheService.getAuthorizationRequestState(state).flatMap(requestState -> {
+                        if (requestState == null) {
+                            return Uni.createFrom().voidItem();
+                        }
+                        requestState.setUserId(userId);
+                        return cacheService.saveAuthorizationRequestState(state, requestState,
+                                ttlConfig.requestStateLifetime()).replaceWithVoid();
+                    });
+                })
+                .flatMap(v -> resolvePostLoginRedirect(newSessionId, userId, state, policy));
     }
 
-    private Uni<Response> resolvePostLoginRedirect(String newSessionId, String userId, String state) {
+    private Uni<Response> resolvePostLoginRedirect(String newSessionId, String userId, String state,
+                                                   ClientOAuthPolicy policy) {
         if (state == null) {
-            return Uni.createFrom().item(buildLoginRedirect(newSessionId, null, "/"));
+            return Uni.createFrom().item(buildLoginRedirect(newSessionId, null, "/", policy));
         }
         return cacheService.getAuthorizationRequestState(state).flatMap(requestState -> {
             if (requestState == null) {
-                return Uni.createFrom().item(buildLoginRedirect(newSessionId, state, "/consent"));
+                return Uni.createFrom().item(buildLoginRedirect(newSessionId, state, "/consent", policy));
             }
             return membershipService.isMember(userId, requestState.getClientId()).flatMap(member -> {
                 if (!member) {
@@ -163,42 +155,56 @@ public class LoginEndpoint {
                     if (consent != null && ScopeUtil.coversScopes(consent.getScopes(), requestState.getScope())) {
                         return authorizationCodeService.issueCodeAndRedirect(userId, requestState, state)
                                 .map(response -> Response.seeOther(response.getLocation())
-                                        .header("Set-Cookie", sessionCookieFactory.create(newSessionId))
+                                        .header("Set-Cookie", sessionCookieFactory.create(newSessionId, policy))
                                         .build());
                     }
-                    return Uni.createFrom().item(buildLoginRedirect(newSessionId, state, "/consent"));
+                    return Uni.createFrom().item(buildLoginRedirect(newSessionId, state, "/consent", policy));
                 });
             });
         });
     }
 
-    private Response buildLoginRedirect(String newSessionId, String state, String targetPath) {
+    private Response buildLoginRedirect(String newSessionId, String state, String targetPath,
+                                        ClientOAuthPolicy policy) {
         URI redirectUri = state != null
                 ? OAuthRedirectBuilder.build(targetPath, Map.of("state", state))
                 : URI.create(targetPath);
         return Response.seeOther(redirectUri)
-                .header("Set-Cookie", sessionCookieFactory.create(newSessionId))
+                .header("Set-Cookie", sessionCookieFactory.create(newSessionId, policy))
                 .build();
     }
 
-    private Uni<Response> renderLoginPage(String sessionId, SessionData session, String state, boolean issueCookie) {
+    private Uni<Response> renderLoginPage(String sessionId, SessionData session, String state,
+                                          ClientOAuthPolicy policy, boolean issueCookie) {
         String csrfToken = UUID.randomUUID().toString();
         session.setCsrfToken(csrfToken);
-        return resolveSessionLifetime(state).flatMap(sessionLifetime ->
-                cacheService.saveSession(sessionId, session, sessionLifetime)
-                        .replaceWith(buildLoginResponse(sessionId, state, csrfToken, null, issueCookie)));
+        return cacheService.saveSession(sessionId, session, policy.getSessionLifetimeSeconds())
+                .replaceWith(buildLoginResponse(sessionId, state, csrfToken, null, issueCookie, policy));
     }
 
     private Response buildLoginResponse(String sessionId, String state, String csrfToken,
-                                        String error, boolean issueCookie) {
+                                        String error, boolean issueCookie, ClientOAuthPolicy policy) {
         TemplateInstance template = login.instance();
         template.data("error", error);
         template.data("state", state);
         template.data("csrfToken", csrfToken);
         Response.ResponseBuilder response = Response.ok(template.render()).type(MediaType.TEXT_HTML);
         if (issueCookie) {
-            response.header("Set-Cookie", sessionCookieFactory.create(sessionId));
+            response.header("Set-Cookie", sessionCookieFactory.create(sessionId, policy));
         }
         return response.build();
+    }
+
+    private Uni<ClientOAuthPolicy> resolveOAuthPolicy(String state) {
+        if (state == null) {
+            return Uni.createFrom().item(tokenPolicyService.defaultOAuthPolicy());
+        }
+        return cacheService.getAuthorizationRequestState(state)
+                .flatMap(requestState -> {
+                    if (requestState == null) {
+                        return Uni.createFrom().item(tokenPolicyService.defaultOAuthPolicy());
+                    }
+                    return tokenPolicyService.resolveOAuthPolicyForClient(requestState.getClientId());
+                });
     }
 }

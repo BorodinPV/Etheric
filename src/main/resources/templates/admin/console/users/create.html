@@ -6,31 +6,31 @@
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="username">Username *</label>
+        <label class="pf-c-form__label" for="username">{i18n.get('common.username')} *</label>
         <input class="pf-c-form-control" type="text" id="username" name="username" required>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="password">Password *</label>
+        <label class="pf-c-form__label" for="password">{i18n.get('common.password')} *</label>
         <input class="pf-c-form-control" type="password" id="password" name="password" required minlength="8">
-        <div class="pf-c-form__helper">Minimum 8 characters</div>
+        <div class="pf-c-form__helper">{i18n.get('common.helper.minPassword')}</div>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="email">Email</label>
+        <label class="pf-c-form__label" for="email">{i18n.get('common.email')}</label>
         <input class="pf-c-form-control" type="email" id="email" name="email">
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="roles">Roles</label>
+        <label class="pf-c-form__label" for="roles">{i18n.get('common.roles')}</label>
         <input class="pf-c-form-control" type="text" id="roles" name="roles" value="user">
-        <div class="pf-c-form__helper">Space or comma separated</div>
+        <div class="pf-c-form__helper">{i18n.get('common.helper.spaceCommaSeparated')}</div>
     </div>
 
     <div class="pf-c-form__group pf-c-checkbox">
-        <label><input type="checkbox" name="enabled" checked> Enabled</label>
+        <label><input type="checkbox" name="enabled" checked> {i18n.get('common.enabled')}</label>
     </div>
 
-    <button class="pf-c-button pf-m-primary" type="submit">Create</button>
-    <a class="pf-c-button pf-m-secondary" href="/admin/console/users" style="margin-left:8px">Cancel</a>
+    <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.create')}</button>
+    <a class="pf-c-button pf-m-secondary" href="/admin/console/users" style="margin-left:8px">{i18n.get('common.cancel')}</a>
 </form>

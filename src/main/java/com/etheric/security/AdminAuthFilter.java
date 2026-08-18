@@ -97,7 +97,7 @@ public class AdminAuthFilter {
     }
 
     private static boolean isPublicPath(String path) {
-        if ("admin/console/login".equals(path)) {
+        if ("admin/console/login".equals(path) || "admin/console/locale".equals(path)) {
             return true;
         }
         return CSS_PATH.matcher(path).matches();

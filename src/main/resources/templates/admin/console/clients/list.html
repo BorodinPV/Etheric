@@ -1,19 +1,19 @@
 <div class="pf-c-toolbar">
     <form class="pf-c-search" method="get" action="/admin/console/clients">
-        <input class="pf-c-form-control" type="search" name="search" value="{search}" placeholder="Search clients...">
+        <input class="pf-c-form-control" type="search" name="search" value="{search}" placeholder="{i18n.get('common.searchClients')}">
     </form>
-    <a class="pf-c-button pf-m-primary" href="/admin/console/clients/create">Create client</a>
+    <a class="pf-c-button pf-m-primary" href="/admin/console/clients/create">{i18n.get('page.createClient')}</a>
 </div>
 
 {#if clients.isEmpty()}
-<div class="pf-c-empty">No clients found.</div>
+<div class="pf-c-empty">{i18n.get('common.noClientsFound')}</div>
 {#else}
 <table class="pf-c-table">
     <thead>
     <tr>
-        <th>Client ID</th>
-        <th>Name</th>
-        <th>Enabled</th>
+        <th>{i18n.get('common.clientId')}</th>
+        <th>{i18n.get('client.list.name')}</th>
+        <th>{i18n.get('client.list.enabled')}</th>
     </tr>
     </thead>
     <tbody>
@@ -23,9 +23,9 @@
         <td>{client.clientName}</td>
         <td>
             {#if client.enabled}
-            <span class="pf-c-badge pf-m-success">Yes</span>
+            <span class="pf-c-badge pf-m-success">{i18n.get('common.yes')}</span>
             {#else}
-            <span class="pf-c-badge pf-m-danger">No</span>
+            <span class="pf-c-badge pf-m-danger">{i18n.get('common.no')}</span>
             {/if}
         </td>
     </tr>

@@ -1,7 +1,7 @@
 <div class="pf-c-tabs">
-    <a class="pf-c-tabs__link {#if activeTab == 'settings'}active{/if}" href="/admin/console/clients/{clientId}/settings">Settings</a>
-    <a class="pf-c-tabs__link {#if activeTab == 'credentials'}active{/if}" href="/admin/console/clients/{clientId}/credentials">Credentials</a>
-    <a class="pf-c-tabs__link {#if activeTab == 'users'}active{/if}" href="/admin/console/clients/{clientId}/users">Users</a>
+    <a class="pf-c-tabs__link {#if activeTab == 'settings'}active{/if}" href="/admin/console/clients/{clientId}/settings">{i18n.get('tab.settings')}</a>
+    <a class="pf-c-tabs__link {#if activeTab == 'credentials'}active{/if}" href="/admin/console/clients/{clientId}/credentials">{i18n.get('tab.credentials')}</a>
+    <a class="pf-c-tabs__link {#if activeTab == 'users'}active{/if}" href="/admin/console/clients/{clientId}/users">{i18n.get('tab.users')}</a>
 </div>
 
 {#if success}
@@ -15,62 +15,78 @@
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label">Client ID</label>
+        <label class="pf-c-form__label">{i18n.get('common.clientId')}</label>
         <input class="pf-c-form-control" type="text" value="{client.clientId}" disabled>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="client_name">Name *</label>
+        <label class="pf-c-form__label" for="client_name">{i18n.get('common.name')} *</label>
         <input class="pf-c-form-control" type="text" id="client_name" name="client_name" value="{client.clientName}" required>
     </div>
 
     <div class="pf-c-form__group pf-c-checkbox">
-        <label><input type="checkbox" name="enabled" {#if client.enabled}checked{/if}> Enabled</label>
+        <label><input type="checkbox" name="enabled" {#if client.enabled}checked{/if}> {i18n.get('common.enabled')}</label>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="redirect_uris">Redirect URIs *</label>
+        <label class="pf-c-form__label" for="redirect_uris">{i18n.get('client.settings.redirectUris')} *</label>
         <textarea class="pf-c-form-control" id="redirect_uris" name="redirect_uris" required>{#for uri in client.redirectUris}{uri}
 {/for}</textarea>
-        <div class="pf-c-form__helper">One redirect URI per line</div>
+        <div class="pf-c-form__helper">{i18n.get('common.helper.oneUriPerLine')}</div>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="scopes">Scopes</label>
+        <label class="pf-c-form__label" for="scopes">{i18n.get('common.scopes')}</label>
         <input class="pf-c-form-control" type="text" id="scopes" name="scopes" value="{#for s in client.scopes}{s} {/for}">
-        <div class="pf-c-form__helper">Space or comma separated</div>
+        <div class="pf-c-form__helper">{i18n.get('common.helper.spaceCommaSeparated')}</div>
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="grant_types">Grant types</label>
+        <label class="pf-c-form__label" for="grant_types">{i18n.get('common.grantTypes')}</label>
         <input class="pf-c-form-control" type="text" id="grant_types" name="grant_types" value="{#for g in client.grantTypes}{g} {/for}">
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="client_description">Description</label>
+        <label class="pf-c-form__label" for="client_description">{i18n.get('common.description')}</label>
         <input class="pf-c-form-control" type="text" id="client_description" name="client_description" value="{client.clientDescription}">
     </div>
 
-    <h2>Token &amp; session overrides</h2>
-    <p>Leave blank to use server defaults from <a href="/admin/console/settings">Server settings</a>.</p>
+    <h2>{i18n.get('client.settings.tokenOverrides')}</h2>
+    <p>{i18n.get('client.settings.tokenOverridesHint')} <a href="/admin/console/settings">{i18n.get('client.settings.serverSettingsLink')}</a>.</p>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="access_token_lifetime_seconds">Access token lifetime (seconds)</label>
+        <label class="pf-c-form__label" for="session_cookie_name">{i18n.get('client.settings.sessionCookieName')}</label>
+        <input class="pf-c-form-control" type="text" id="session_cookie_name" name="session_cookie_name"
+               value="{client.sessionCookieName}" pattern="[A-Za-z0-9_-]+">
+        <div class="pf-c-form__helper">{i18n.get('client.settings.sessionCookieNameHelper')}</div>
+    </div>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="session_cookie_secure">{i18n.get('client.settings.secureCookieFlag')}</label>
+        <select class="pf-c-form-control" id="session_cookie_secure" name="session_cookie_secure">
+            <option value="" {#if client.sessionCookieSecure == null}selected{/if}>{i18n.get('client.settings.serverDefault')}</option>
+            <option value="true" {#if client.sessionCookieSecure == true}selected{/if}>{i18n.get('client.settings.secureHttps')}</option>
+            <option value="false" {#if client.sessionCookieSecure == false}selected{/if}>{i18n.get('client.settings.notSecure')}</option>
+        </select>
+    </div>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="access_token_lifetime_seconds">{i18n.get('client.settings.accessTokenLifetime')}</label>
         <input class="pf-c-form-control" type="number" id="access_token_lifetime_seconds" name="access_token_lifetime_seconds"
                value="{client.accessTokenLifetimeSeconds}" min="1">
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="refresh_token_lifetime_seconds">Refresh token lifetime (seconds)</label>
+        <label class="pf-c-form__label" for="refresh_token_lifetime_seconds">{i18n.get('client.settings.refreshTokenLifetime')}</label>
         <input class="pf-c-form-control" type="number" id="refresh_token_lifetime_seconds" name="refresh_token_lifetime_seconds"
                value="{client.refreshTokenLifetimeSeconds}" min="1">
     </div>
 
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="session_lifetime_seconds">OAuth session lifetime (seconds)</label>
+        <label class="pf-c-form__label" for="session_lifetime_seconds">{i18n.get('client.settings.sessionLifetime')}</label>
         <input class="pf-c-form-control" type="number" id="session_lifetime_seconds" name="session_lifetime_seconds"
                value="{client.sessionLifetimeSeconds}" min="1">
     </div>
 
-    <button class="pf-c-button pf-m-primary" type="submit">Save</button>
+    <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.save')}</button>
 </form>

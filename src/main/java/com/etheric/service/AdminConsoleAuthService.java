@@ -136,16 +136,16 @@ public class AdminConsoleAuthService {
 
         public static LoginAttemptResult invalidCredentials(AdminSessionData session, String sessionId) {
             return new LoginAttemptResult(Outcome.INVALID_CREDENTIALS, sessionId, session,
-                    "Invalid username or password");
+                    "invalid_credentials");
         }
 
         public static LoginAttemptResult accessDenied(AdminSessionData session, String sessionId) {
             return new LoginAttemptResult(Outcome.ACCESS_DENIED, sessionId, session,
-                    "Access denied: admin role required");
+                    "access_denied");
         }
 
         public static LoginAttemptResult csrfError() {
-            return new LoginAttemptResult(Outcome.CSRF_ERROR, null, null, "Invalid CSRF token");
+            return new LoginAttemptResult(Outcome.CSRF_ERROR, null, null, "invalid_csrf");
         }
     }
 

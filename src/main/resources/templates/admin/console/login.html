@@ -1,17 +1,22 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{htmlLang}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign in - Etheric Admin</title>
+    <title>{i18n.get('login.pageTitle')} - {i18n.get('app.title')}</title>
     <link rel="stylesheet" href="/admin/admin-console.css">
 </head>
 <body>
 <div class="pf-c-login">
     <div class="pf-c-login__card">
-        <div class="pf-c-login__brand"><span>Etheric</span></div>
-        <h1 class="pf-c-login__title">Sign in to your account</h1>
-        <p class="pf-c-login__subtitle">Admin Console</p>
+        <div class="pf-c-login__brand"><span>{i18n.get('app.brand')}</span></div>
+        <nav class="pf-c-locale-switcher pf-c-locale-switcher--center" aria-label="Language">
+            <a class="pf-c-locale-switcher__link {#if locale == 'en'}active{/if}" href="/admin/console/locale?lang=en">{i18n.get('lang.en')}</a>
+            <span class="pf-c-locale-switcher__sep">|</span>
+            <a class="pf-c-locale-switcher__link {#if locale == 'ru'}active{/if}" href="/admin/console/locale?lang=ru">{i18n.get('lang.ru')}</a>
+        </nav>
+        <h1 class="pf-c-login__title">{i18n.get('login.title')}</h1>
+        <p class="pf-c-login__subtitle">{i18n.get('login.subtitle')}</p>
         {#if error}
         <div class="pf-c-alert pf-m-danger">{error}</div>
         {/if}
@@ -21,14 +26,14 @@
             <input type="hidden" name="redirect_uri" value="{redirectUri}">
             {/if}
             <div class="pf-c-form__group">
-                <label class="pf-c-form__label" for="username">Username</label>
+                <label class="pf-c-form__label" for="username">{i18n.get('login.username')}</label>
                 <input class="pf-c-form-control" type="text" id="username" name="username" required autofocus>
             </div>
             <div class="pf-c-form__group">
-                <label class="pf-c-form__label" for="password">Password</label>
+                <label class="pf-c-form__label" for="password">{i18n.get('login.password')}</label>
                 <input class="pf-c-form-control" type="password" id="password" name="password" required>
             </div>
-            <button class="pf-c-button pf-m-primary" type="submit" style="width:100%">Sign in</button>
+            <button class="pf-c-button pf-m-primary" type="submit" style="width:100%">{i18n.get('login.submit')}</button>
         </form>
     </div>
 </div>

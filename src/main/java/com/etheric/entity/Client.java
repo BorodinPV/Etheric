@@ -61,6 +61,12 @@ public class Client extends PanacheEntityBase {
     @Column(name = "session_lifetime_seconds")
     public Integer sessionLifetimeSeconds;
 
+    @Column(name = "session_cookie_name")
+    public String sessionCookieName;
+
+    @Column(name = "session_cookie_secure")
+    public Boolean sessionCookieSecure;
+
     public Client() {
     }
 
@@ -68,7 +74,7 @@ public class Client extends PanacheEntityBase {
                   List<String> redirectUris, List<String> scopes, List<String> grantTypes,
                   boolean enabled, OffsetDateTime createdAt, String clientDescription) {
         this(id, clientId, clientSecretHash, clientName, redirectUris, scopes, grantTypes,
-                enabled, createdAt, clientDescription, null, null, null);
+                enabled, createdAt, clientDescription, null, null, null, null, null);
     }
 
     public Client(UUID id, String clientId, String clientSecretHash, String clientName,
@@ -76,6 +82,17 @@ public class Client extends PanacheEntityBase {
                   boolean enabled, OffsetDateTime createdAt, String clientDescription,
                   Integer accessTokenLifetimeSeconds, Integer refreshTokenLifetimeSeconds,
                   Integer sessionLifetimeSeconds) {
+        this(id, clientId, clientSecretHash, clientName, redirectUris, scopes, grantTypes,
+                enabled, createdAt, clientDescription, accessTokenLifetimeSeconds,
+                refreshTokenLifetimeSeconds, sessionLifetimeSeconds, null, null);
+    }
+
+    public Client(UUID id, String clientId, String clientSecretHash, String clientName,
+                  List<String> redirectUris, List<String> scopes, List<String> grantTypes,
+                  boolean enabled, OffsetDateTime createdAt, String clientDescription,
+                  Integer accessTokenLifetimeSeconds, Integer refreshTokenLifetimeSeconds,
+                  Integer sessionLifetimeSeconds, String sessionCookieName,
+                  Boolean sessionCookieSecure) {
         this.id = id;
         this.clientId = clientId;
         this.clientSecretHash = clientSecretHash;
@@ -89,5 +106,7 @@ public class Client extends PanacheEntityBase {
         this.accessTokenLifetimeSeconds = accessTokenLifetimeSeconds;
         this.refreshTokenLifetimeSeconds = refreshTokenLifetimeSeconds;
         this.sessionLifetimeSeconds = sessionLifetimeSeconds;
+        this.sessionCookieName = sessionCookieName;
+        this.sessionCookieSecure = sessionCookieSecure;
     }
 }

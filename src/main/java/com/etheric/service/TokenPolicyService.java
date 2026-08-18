@@ -3,6 +3,7 @@ package com.etheric.service;
 import com.etheric.config.EthericTtlConfig;
 import com.etheric.entity.Client;
 import com.etheric.entity.ServerSettings;
+import com.etheric.model.ClientOAuthPolicy;
 import com.etheric.model.TokenLifetimes;
 import com.etheric.repository.ClientRepository;
 import com.etheric.repository.ServerSettingsRepository;
@@ -16,6 +17,9 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Resolves OAuth cookie and token lifetime settings from DB with application.properties fallback.
@@ -61,41 +65,73 @@ public class TokenPolicyService {
                 });
     }
 
+    /** @deprecated Prefer {@link #defaultOAuthPolicy()} */
     public String oauthSessionCookieName() {
-        return resolveSnapshot().oauthSessionCookieName();
+        return defaultOAuthPolicy().getSessionCookieName();
     }
 
+    /** @deprecated Prefer {@link #defaultOAuthPolicy()} */
     public boolean sessionCookieSecure() {
-        return resolveSnapshot().sessionCookieSecure();
+        return defaultOAuthPolicy().isSessionCookieSecure();
     }
 
+    /** @deprecated Prefer {@link #defaultOAuthPolicy()} */
     public long oauthSessionLifetimeSeconds() {
-        return resolveSnapshot().oauthSessionLifetimeSeconds();
+        return defaultOAuthPolicy().getSessionLifetimeSeconds();
     }
 
-    public Uni<TokenLifetimes> resolveForClient(String clientId) {
-        if (clientId == null || clientId.isBlank()) {
-            return Uni.createFrom().item(defaultLifetimes());
-        }
-        return clientRepository.findByClientId(clientId)
-                .map(opt -> opt.map(this::lifetimesForClient).orElseGet(this::defaultLifetimes));
-    }
-
-    public Uni<Long> resolveSessionLifetimeForClient(String clientId) {
-        return resolveForClient(clientId).map(TokenLifetimes::getSessionLifetimeSeconds);
-    }
-
-    public TokenLifetimes defaultLifetimes() {
+    public ClientOAuthPolicy defaultOAuthPolicy() {
         ServerSettingsSnapshot active = resolveSnapshot();
-        return new TokenLifetimes(
+        return new ClientOAuthPolicy(
+                active.oauthSessionCookieName(),
+                active.sessionCookieSecure(),
                 active.defaultAccessTokenLifetimeSeconds(),
                 active.defaultRefreshTokenLifetimeSeconds(),
                 active.oauthSessionLifetimeSeconds());
     }
 
-    private TokenLifetimes lifetimesForClient(Client client) {
+    public Uni<ClientOAuthPolicy> resolveOAuthPolicyForClient(String clientId) {
+        if (clientId == null || clientId.isBlank()) {
+            return Uni.createFrom().item(defaultOAuthPolicy());
+        }
+        return clientRepository.findByClientId(clientId)
+                .map(opt -> opt.map(this::oauthPolicyForClient).orElseGet(this::defaultOAuthPolicy));
+    }
+
+    public Uni<TokenLifetimes> resolveForClient(String clientId) {
+        return resolveOAuthPolicyForClient(clientId).map(this::toLifetimes);
+    }
+
+    public Uni<Long> resolveSessionLifetimeForClient(String clientId) {
+        return resolveOAuthPolicyForClient(clientId).map(ClientOAuthPolicy::getSessionLifetimeSeconds);
+    }
+
+    public Uni<List<ClientOAuthPolicy>> knownOAuthPolicies() {
+        return clientRepository.findAllClients().map(clients -> {
+            Map<String, ClientOAuthPolicy> byCookieName = new LinkedHashMap<>();
+            ClientOAuthPolicy serverDefault = defaultOAuthPolicy();
+            byCookieName.put(serverDefault.getSessionCookieName(), serverDefault);
+            for (Client client : clients) {
+                ClientOAuthPolicy policy = oauthPolicyForClient(client);
+                byCookieName.putIfAbsent(policy.getSessionCookieName(), policy);
+            }
+            return List.copyOf(byCookieName.values());
+        });
+    }
+
+    public TokenLifetimes defaultLifetimes() {
+        return toLifetimes(defaultOAuthPolicy());
+    }
+
+    public ServerSettingsSnapshot currentSnapshot() {
+        return resolveSnapshot();
+    }
+
+    private ClientOAuthPolicy oauthPolicyForClient(Client client) {
         ServerSettingsSnapshot active = resolveSnapshot();
-        return new TokenLifetimes(
+        return new ClientOAuthPolicy(
+                resolveCookieName(client.sessionCookieName, active.oauthSessionCookieName()),
+                resolveCookieSecure(client.sessionCookieSecure, active.sessionCookieSecure()),
                 client.accessTokenLifetimeSeconds != null
                         ? client.accessTokenLifetimeSeconds
                         : active.defaultAccessTokenLifetimeSeconds(),
@@ -107,8 +143,22 @@ public class TokenPolicyService {
                         : active.oauthSessionLifetimeSeconds());
     }
 
-    public ServerSettingsSnapshot currentSnapshot() {
-        return resolveSnapshot();
+    private static String resolveCookieName(String clientValue, String serverDefault) {
+        if (clientValue == null || clientValue.isBlank()) {
+            return serverDefault;
+        }
+        return clientValue.trim();
+    }
+
+    private static boolean resolveCookieSecure(Boolean clientValue, boolean serverDefault) {
+        return clientValue != null ? clientValue : serverDefault;
+    }
+
+    private TokenLifetimes toLifetimes(ClientOAuthPolicy policy) {
+        return new TokenLifetimes(
+                policy.getAccessTokenLifetimeSeconds(),
+                policy.getRefreshTokenLifetimeSeconds(),
+                policy.getSessionLifetimeSeconds());
     }
 
     private ServerSettingsSnapshot resolveSnapshot() {
@@ -154,5 +204,23 @@ public class TokenPolicyService {
         settings.sessionCookieSecure = view.isSessionCookieSecure();
         settings.updatedAt = OffsetDateTime.now();
         return settings;
+    }
+
+    public static String validateCookieName(String cookieName) {
+        if (cookieName == null || cookieName.isBlank()) {
+            return null;
+        }
+        String trimmed = cookieName.trim();
+        if (!trimmed.matches("[A-Za-z0-9_-]+")) {
+            return "session_cookie_name must be alphanumeric, dash, or underscore";
+        }
+        return null;
+    }
+
+    public static String normalizeOptionalCookieName(String cookieName) {
+        if (cookieName == null || cookieName.isBlank()) {
+            return null;
+        }
+        return cookieName.trim();
     }
 }

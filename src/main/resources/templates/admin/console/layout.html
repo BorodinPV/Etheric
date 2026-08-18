@@ -1,31 +1,38 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{htmlLang}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{pageTitle} - Etheric Admin</title>
+    <title>{pageTitle} - {i18n.get('app.title')}</title>
     <link rel="stylesheet" href="/admin/admin-console.css">
 </head>
 <body>
 <div class="pf-c-page">
     <header class="pf-c-masthead">
-        <div class="pf-c-masthead__brand"><span>Etheric</span> Admin Console</div>
-        <details class="pf-c-masthead__user">
-            <summary>{username}</summary>
-            <div class="pf-c-masthead__menu">
-                <form method="post" action="/admin/console/logout">
-                    <input type="hidden" name="csrf_token" value="{csrfToken}">
-                    <button type="submit">Sign out</button>
-                </form>
-            </div>
-        </details>
+        <div class="pf-c-masthead__brand"><span>{i18n.get('app.brand')}</span> {i18n.get('app.console')}</div>
+        <div class="pf-c-masthead__actions">
+            <nav class="pf-c-locale-switcher" aria-label="Language">
+                <a class="pf-c-locale-switcher__link {#if locale == 'en'}active{/if}" href="/admin/console/locale?lang=en">{i18n.get('lang.en')}</a>
+                <span class="pf-c-locale-switcher__sep">|</span>
+                <a class="pf-c-locale-switcher__link {#if locale == 'ru'}active{/if}" href="/admin/console/locale?lang=ru">{i18n.get('lang.ru')}</a>
+            </nav>
+            <details class="pf-c-masthead__user">
+                <summary>{username}</summary>
+                <div class="pf-c-masthead__menu">
+                    <form method="post" action="/admin/console/logout">
+                        <input type="hidden" name="csrf_token" value="{csrfToken}">
+                        <button type="submit">{i18n.get('nav.signOut')}</button>
+                    </form>
+                </div>
+            </details>
+        </div>
     </header>
     <div class="pf-c-page__main">
         <nav class="pf-c-page__sidebar">
-            <div class="pf-c-nav__section-title">Manage</div>
-            <a class="pf-c-nav__link {#if navSection == 'clients'}active{/if}" href="/admin/console/clients">Clients</a>
-            <a class="pf-c-nav__link {#if navSection == 'users'}active{/if}" href="/admin/console/users">Users</a>
-            <a class="pf-c-nav__link {#if navSection == 'settings'}active{/if}" href="/admin/console/settings">Server settings</a>
+            <div class="pf-c-nav__section-title">{i18n.get('nav.manage')}</div>
+            <a class="pf-c-nav__link {#if navSection == 'clients'}active{/if}" href="/admin/console/clients">{i18n.get('nav.clients')}</a>
+            <a class="pf-c-nav__link {#if navSection == 'users'}active{/if}" href="/admin/console/users">{i18n.get('nav.users')}</a>
+            <a class="pf-c-nav__link {#if navSection == 'settings'}active{/if}" href="/admin/console/settings">{i18n.get('nav.settings')}</a>
         </nav>
         <main class="pf-c-page__main-section">
             {#if breadcrumbs.size > 0}

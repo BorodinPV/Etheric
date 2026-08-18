@@ -1,19 +1,19 @@
 <div class="pf-c-toolbar">
     <form class="pf-c-search" method="get" action="/admin/console/users">
-        <input class="pf-c-form-control" type="search" name="search" value="{search}" placeholder="Search users...">
+        <input class="pf-c-form-control" type="search" name="search" value="{search}" placeholder="{i18n.get('common.searchUsers')}">
     </form>
-    <a class="pf-c-button pf-m-primary" href="/admin/console/users/create">Create user</a>
+    <a class="pf-c-button pf-m-primary" href="/admin/console/users/create">{i18n.get('page.createUser')}</a>
 </div>
 
 {#if users.isEmpty()}
-<div class="pf-c-empty">No users found.</div>
+<div class="pf-c-empty">{i18n.get('common.noUsersFound')}</div>
 {#else}
 <table class="pf-c-table">
     <thead>
     <tr>
-        <th>Username</th>
-        <th>Email</th>
-        <th>Enabled</th>
+        <th>{i18n.get('common.username')}</th>
+        <th>{i18n.get('common.email')}</th>
+        <th>{i18n.get('client.list.enabled')}</th>
     </tr>
     </thead>
     <tbody>
@@ -23,9 +23,9 @@
         <td>{#if user.email}{user.email}{#else}-{/if}</td>
         <td>
             {#if user.enabled}
-            <span class="pf-c-badge pf-m-success">Yes</span>
+            <span class="pf-c-badge pf-m-success">{i18n.get('common.yes')}</span>
             {#else}
-            <span class="pf-c-badge pf-m-danger">No</span>
+            <span class="pf-c-badge pf-m-danger">{i18n.get('common.no')}</span>
             {/if}
         </td>
     </tr>

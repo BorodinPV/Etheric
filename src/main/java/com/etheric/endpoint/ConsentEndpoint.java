@@ -59,41 +59,44 @@ public class ConsentEndpoint {
             return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST).build());
         }
 
-        String sessionId = sessionCookieFactory.extractSessionId(headers);
-        if (sessionId == null) {
-            return Uni.createFrom().item(Response.seeOther(
-                    OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
-        }
-
-        return cacheService.getSession(sessionId).flatMap(session -> {
-            if (session == null) {
-                return Uni.createFrom().item(Response.seeOther(
-                    OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
+        return cacheService.getAuthorizationRequestState(state).flatMap(requestState -> {
+            if (requestState == null) {
+                return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST)
+                        .entity("Invalid or expired authorization request").build());
             }
-            return cacheService.getAuthorizationRequestState(state).flatMap(requestState -> {
-                if (requestState == null) {
-                    return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST)
-                            .entity("Invalid or expired authorization request").build());
-                }
-                return clientRepository.findByClientId(requestState.getClientId()).flatMap(clientOpt -> {
-                    if (clientOpt.isEmpty()) {
-                        return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST)
-                                .entity("Client not found").build());
-                    }
-                    return membershipService.isMember(session.getUserId(), requestState.getClientId())
-                            .flatMap(member -> {
-                                if (!member) {
-                                    return Uni.createFrom().failure(new OAuthException(
-                                            OAuthError.ACCESS_DENIED, requestState.getRedirectUri(), state));
+            return tokenPolicyService.resolveOAuthPolicyForClient(requestState.getClientId())
+                    .flatMap(policy -> {
+                        String sessionId = sessionCookieFactory.extractSessionId(headers, policy);
+                        if (sessionId == null) {
+                            return Uni.createFrom().item(Response.seeOther(
+                                    OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
+                        }
+                        return cacheService.getSession(sessionId).flatMap(session -> {
+                            if (session == null) {
+                                return Uni.createFrom().item(Response.seeOther(
+                                        OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
+                            }
+                            return clientRepository.findByClientId(requestState.getClientId()).flatMap(clientOpt -> {
+                                if (clientOpt.isEmpty()) {
+                                    return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST)
+                                            .entity("Client not found").build());
                                 }
-                                String csrfToken = UUID.randomUUID().toString();
-                                session.setCsrfToken(csrfToken);
-                                return tokenPolicyService.resolveSessionLifetimeForClient(requestState.getClientId())
-                                        .flatMap(sessionLifetime -> cacheService.saveSession(sessionId, session, sessionLifetime)
-                                                .replaceWith(renderConsent(clientOpt.get(), requestState, state, csrfToken)));
+                                return membershipService.isMember(session.getUserId(), requestState.getClientId())
+                                        .flatMap(member -> {
+                                            if (!member) {
+                                                return Uni.createFrom().failure(new OAuthException(
+                                                        OAuthError.ACCESS_DENIED, requestState.getRedirectUri(), state));
+                                            }
+                                            String csrfToken = UUID.randomUUID().toString();
+                                            session.setCsrfToken(csrfToken);
+                                            return cacheService.saveSession(sessionId, session,
+                                                            policy.getSessionLifetimeSeconds())
+                                                    .replaceWith(renderConsent(clientOpt.get(), requestState, state,
+                                                            csrfToken));
+                                        });
                             });
-                });
-            });
+                        });
+                    });
         });
     }
 
@@ -109,31 +112,33 @@ public class ConsentEndpoint {
             return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST).build());
         }
 
-        String sessionId = sessionCookieFactory.extractSessionId(headers);
-        if (sessionId == null) {
-            return Uni.createFrom().item(Response.seeOther(
-                    OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
-        }
-
-        return cacheService.getSession(sessionId).flatMap(session -> {
-            if (session == null) {
-                return Uni.createFrom().item(Response.seeOther(
-                    OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
+        return cacheService.getAuthorizationRequestState(state).flatMap(requestState -> {
+            if (requestState == null) {
+                return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST)
+                        .entity("Invalid or expired authorization request").build());
             }
-            if (csrfToken == null || !csrfToken.equals(session.getCsrfToken())) {
-                return Uni.createFrom().item(Response.status(Response.Status.FORBIDDEN)
-                        .entity("Invalid CSRF token").build());
-            }
-            return cacheService.getAuthorizationRequestState(state).flatMap(requestState -> {
-                if (requestState == null) {
-                    return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST)
-                            .entity("Invalid or expired authorization request").build());
-                }
-                if ("approve".equals(action)) {
-                    return handleApprove(session, requestState, state);
-                }
-                return handleDeny(requestState, state);
-            });
+            return tokenPolicyService.resolveOAuthPolicyForClient(requestState.getClientId())
+                    .flatMap(policy -> {
+                        String sessionId = sessionCookieFactory.extractSessionId(headers, policy);
+                        if (sessionId == null) {
+                            return Uni.createFrom().item(Response.seeOther(
+                                    OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
+                        }
+                        return cacheService.getSession(sessionId).flatMap(session -> {
+                            if (session == null) {
+                                return Uni.createFrom().item(Response.seeOther(
+                                        OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
+                            }
+                            if (csrfToken == null || !csrfToken.equals(session.getCsrfToken())) {
+                                return Uni.createFrom().item(Response.status(Response.Status.FORBIDDEN)
+                                        .entity("Invalid CSRF token").build());
+                            }
+                            if ("approve".equals(action)) {
+                                return handleApprove(session, requestState, state);
+                            }
+                            return handleDeny(requestState, state);
+                        });
+                    });
         });
     }
 

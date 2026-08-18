@@ -7,6 +7,7 @@ import com.etheric.exception.OAuthException;
 import com.etheric.model.AuthorizationRequestState;
 import com.etheric.repository.ClientRepository;
 import com.etheric.service.AuthorizationCodeService;
+import com.etheric.service.TokenPolicyService;
 import com.etheric.service.UserClientMembershipService;
 import com.etheric.service.CacheService;
 import com.etheric.util.OAuthRedirectBuilder;
@@ -51,6 +52,9 @@ public class AuthorizationEndpoint {
 
     @Inject
     SessionCookieFactory sessionCookieFactory;
+
+    @Inject
+    TokenPolicyService tokenPolicyService;
 
     @Inject
     UserClientMembershipService membershipService;
@@ -122,18 +126,21 @@ public class AuthorizationEndpoint {
 
     private Uni<AuthorizationRequestState> enrichWithSession(AuthorizationRequestState requestState,
                                                              String state, HttpHeaders headers) {
-        String sessionId = sessionCookieFactory.extractSessionId(headers);
-        if (sessionId == null) {
-            return Uni.createFrom().item(requestState);
-        }
-        return cacheService.getSession(sessionId).flatMap(session -> {
-            if (session == null || session.getUserId() == null) {
-                return Uni.createFrom().item(requestState);
-            }
-            requestState.setUserId(session.getUserId());
-            return cacheService.saveAuthorizationRequestState(state, requestState, ttlConfig.requestStateLifetime())
-                    .replaceWith(requestState);
-        });
+        return tokenPolicyService.resolveOAuthPolicyForClient(requestState.getClientId())
+                .flatMap(policy -> {
+                    String sessionId = sessionCookieFactory.extractSessionId(headers, policy);
+                    if (sessionId == null) {
+                        return Uni.createFrom().item(requestState);
+                    }
+                    return cacheService.getSession(sessionId).flatMap(session -> {
+                        if (session == null || session.getUserId() == null) {
+                            return Uni.createFrom().item(requestState);
+                        }
+                        requestState.setUserId(session.getUserId());
+                        return cacheService.saveAuthorizationRequestState(state, requestState, ttlConfig.requestStateLifetime())
+                                .replaceWith(requestState);
+                    });
+                });
     }
 
     private Uni<Response> redirectForUser(AuthorizationRequestState requestState, String state) {
