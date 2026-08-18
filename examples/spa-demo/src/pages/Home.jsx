@@ -1,11 +1,10 @@
 import { useNavigate } from 'react-router-dom';
-import { getStoredTokens, startLogin } from '../auth';
+import { hasValidSession, startLogin } from '../auth';
 
 export default function Home() {
   const navigate = useNavigate();
-  const { idToken } = getStoredTokens();
 
-  if (idToken) {
+  if (hasValidSession()) {
     navigate('/dashboard', { replace: true });
     return null;
   }

@@ -1,0 +1,35 @@
+<div class="pf-c-tabs">
+    <a class="pf-c-tabs__link {#if activeTab == 'settings'}active{/if}" href="/admin/console/clients/{clientId}/settings">Settings</a>
+    <a class="pf-c-tabs__link {#if activeTab == 'credentials'}active{/if}" href="/admin/console/clients/{clientId}/credentials">Credentials</a>
+    <a class="pf-c-tabs__link {#if activeTab == 'users'}active{/if}" href="/admin/console/clients/{clientId}/users">Users</a>
+</div>
+
+{#if success}
+<div class="pf-c-alert pf-m-success">{success}</div>
+{/if}
+{#if error}
+<div class="pf-c-alert pf-m-danger">{error}</div>
+{/if}
+
+<p>Select users who may authorize with this client.</p>
+
+<form method="post" action="/admin/console/clients/{clientId}/users">
+    <input type="hidden" name="csrf_token" value="{csrfToken}">
+
+    {#if assignments.isEmpty()}
+    <p>No users registered yet.</p>
+    {#else}
+    <div class="pf-c-form__group">
+        {#for item in assignments}
+        <div class="pf-c-checkbox">
+            <label>
+                <input type="checkbox" name="user_ids" value="{item.id}" {#if item.assigned}checked{/if}>
+                {item.label}
+            </label>
+        </div>
+        {/for}
+    </div>
+    {/if}
+
+    <button class="pf-c-button pf-m-primary" type="submit">Save</button>
+</form>

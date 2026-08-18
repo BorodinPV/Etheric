@@ -36,4 +36,13 @@ public class ClientRegistrationResponse {
 
     @JsonProperty("client_description")
     private String clientDescription;
+
+    @JsonProperty("access_token_lifetime_seconds")
+    private Integer accessTokenLifetimeSeconds;
+
+    @JsonProperty("refresh_token_lifetime_seconds")
+    private Integer refreshTokenLifetimeSeconds;
+
+    @JsonProperty("session_lifetime_seconds")
+    private Integer sessionLifetimeSeconds;
 }

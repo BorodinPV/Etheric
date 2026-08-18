@@ -155,7 +155,7 @@ class AdminClientsEndpointTest {
         .then()
             .statusCode(200)
             .body("client_id", equalTo("test-client"))
-            .body("client_name", equalTo("Test Application"))
+            .body("client_name", equalTo("Etheric Dev Application"))
             .body("client_secret", nullValue());
     }
 

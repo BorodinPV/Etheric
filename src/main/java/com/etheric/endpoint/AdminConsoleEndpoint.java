@@ -48,6 +48,10 @@ public class AdminConsoleEndpoint {
     Template adminConsoleClientsDetailCredentials;
 
     @Inject
+    @Location("admin/console/clients/detail-users")
+    Template adminConsoleClientsDetailUsers;
+
+    @Inject
     @Location("admin/console/users/list")
     Template adminConsoleUsersList;
 
@@ -64,6 +68,10 @@ public class AdminConsoleEndpoint {
     Template adminConsoleUsersDetailCredentials;
 
     @Inject
+    @Location("admin/console/users/detail-clients")
+    Template adminConsoleUsersDetailClients;
+
+    @Inject
     AdminConsoleAuthService authService;
 
     @Inject
@@ -71,6 +79,16 @@ public class AdminConsoleEndpoint {
 
     @Inject
     AdminUserService adminUserService;
+
+    @Inject
+    AdminServerSettingsService adminServerSettingsService;
+
+    @Inject
+    UserClientMembershipService membershipService;
+
+    @Inject
+    @Location("admin/console/server-settings")
+    Template adminConsoleServerSettings;
 
     @Inject
     AdminSessionCookieFactory cookieFactory;
@@ -250,6 +268,9 @@ public class AdminConsoleEndpoint {
             @FormParam("grant_types") String grantTypes,
             @FormParam("enabled") String enabled,
             @FormParam("client_description") String clientDescription,
+            @FormParam("access_token_lifetime_seconds") String accessTokenLifetime,
+            @FormParam("refresh_token_lifetime_seconds") String refreshTokenLifetime,
+            @FormParam("session_lifetime_seconds") String sessionLifetimeSeconds,
             @Context ContainerRequestContext requestContext) {
 
         AdminSessionData session = session(requestContext);
@@ -265,6 +286,10 @@ public class AdminConsoleEndpoint {
         request.setEnabled("on".equals(enabled));
         request.setClientDescription(clientDescription);
 
+        Integer accessLifetime = parseOptionalPositiveInt(accessTokenLifetime);
+        Integer refreshLifetime = parseOptionalPositiveInt(refreshTokenLifetime);
+        Integer sessionLifetime = parseOptionalPositiveInt(sessionLifetimeSeconds);
+
         return adminClientService.update(clientId, request).flatMap(result -> {
             if (!result.isSuccess()) {
                 return adminClientService.get(clientId).map(clientResult ->
@@ -272,8 +297,67 @@ public class AdminConsoleEndpoint {
                                 clientResult.isSuccess() ? clientResult.value() : null,
                                 null, errorMessage(result), null));
             }
-            return Uni.createFrom().item(renderClientDetail(session, clientId, "settings", result.value(),
-                    null, null, "Client updated successfully"));
+            return adminClientService.updateTokenLifetimes(clientId, accessLifetime, refreshLifetime, sessionLifetime)
+                    .map(lifetimeResult -> {
+                        if (!lifetimeResult.isSuccess()) {
+                            return renderClientDetail(session, clientId, "settings", lifetimeResult.value(),
+                                    null, errorMessage(lifetimeResult), null);
+                        }
+                        return renderClientDetail(session, clientId, "settings", lifetimeResult.value(),
+                                null, null, "Client updated successfully");
+                    });
+        });
+    }
+
+    @GET
+    @Path("/settings")
+    @Produces(MediaType.TEXT_HTML)
+    public Uni<Response> serverSettings(@Context ContainerRequestContext requestContext) {
+        AdminSessionData session = session(requestContext);
+        return adminServerSettingsService.get().map(result -> {
+            if (!result.isSuccess()) {
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                        .entity("Failed to load server settings").build();
+            }
+            Map<String, Object> data = new HashMap<>();
+            data.put("settings", result.value());
+            data.put("success", null);
+            data.put("error", null);
+            return renderLayout(session, "settings", "Server settings", List.of(), adminConsoleServerSettings, data);
+        });
+    }
+
+    @POST
+    @Path("/settings")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    public Uni<Response> updateServerSettings(
+            @FormParam("csrf_token") String csrfToken,
+            @FormParam("oauth_session_cookie_name") String oauthSessionCookieName,
+            @FormParam("oauth_session_lifetime_seconds") int oauthSessionLifetimeSeconds,
+            @FormParam("default_access_token_lifetime_seconds") int defaultAccessTokenLifetimeSeconds,
+            @FormParam("default_refresh_token_lifetime_seconds") int defaultRefreshTokenLifetimeSeconds,
+            @FormParam("session_cookie_secure") String sessionCookieSecure,
+            @Context ContainerRequestContext requestContext) {
+
+        AdminSessionData session = session(requestContext);
+        if (!authService.validateCsrf(session, csrfToken)) {
+            return Uni.createFrom().item(forbiddenCsrf());
+        }
+
+        ServerSettingsView view = new ServerSettingsView(
+                oauthSessionCookieName,
+                oauthSessionLifetimeSeconds,
+                defaultAccessTokenLifetimeSeconds,
+                defaultRefreshTokenLifetimeSeconds,
+                "on".equals(sessionCookieSecure));
+
+        return adminServerSettingsService.update(view).map(result -> {
+            Map<String, Object> data = new HashMap<>();
+            data.put("settings", result.isSuccess() ? result.value() : view);
+            data.put("error", result.isSuccess() ? null : errorMessage(result));
+            data.put("success", result.isSuccess() ? "Server settings updated successfully" : null);
+            return renderLayout(session, "settings", "Server settings", List.of(), adminConsoleServerSettings, data);
         });
     }
 
@@ -322,6 +406,54 @@ public class AdminConsoleEndpoint {
             return authService.setFlash(sessionId, flash)
                     .replaceWith(Response.seeOther(
                             URI.create("/admin/console/clients/" + clientId + "/credentials")).build());
+        });
+    }
+
+    @GET
+    @Path("/clients/{clientId}/users")
+    @Produces(MediaType.TEXT_HTML)
+    public Uni<Response> clientUsers(@PathParam("clientId") String clientId,
+                                     @Context ContainerRequestContext requestContext) {
+        AdminSessionData session = session(requestContext);
+        return adminClientService.get(clientId).flatMap(result -> {
+            if (!result.isSuccess()) {
+                return Uni.createFrom().item(notFound());
+            }
+            return membershipService.listUsersForClient(clientId)
+                    .map(assignments -> renderClientDetail(session, clientId, "users",
+                            result.value(), null, null, null, assignments));
+        });
+    }
+
+    @POST
+    @Path("/clients/{clientId}/users")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    public Uni<Response> updateClientUsers(
+            @PathParam("clientId") String clientId,
+            @FormParam("csrf_token") String csrfToken,
+            @FormParam("user_ids") List<String> userIds,
+            @Context ContainerRequestContext requestContext) {
+
+        AdminSessionData session = session(requestContext);
+        if (!authService.validateCsrf(session, csrfToken)) {
+            return Uni.createFrom().item(forbiddenCsrf());
+        }
+
+        List<UUID> parsedUserIds = parseUserIds(userIds);
+        return membershipService.replaceClientUsers(clientId, parsedUserIds).flatMap(result -> {
+            if (!result.isSuccess()) {
+                return adminClientService.get(clientId).flatMap(clientResult ->
+                        membershipService.listUsersForClient(clientId)
+                                .map(assignments -> renderClientDetail(session, clientId, "users",
+                                        clientResult.isSuccess() ? clientResult.value() : null,
+                                        null, errorMessage(result), null, assignments)));
+            }
+            return adminClientService.get(clientId).flatMap(clientResult ->
+                    membershipService.listUsersForClient(clientId)
+                            .map(assignments -> renderClientDetail(session, clientId, "users",
+                                    clientResult.isSuccess() ? clientResult.value() : null,
+                                    null, null, "User assignments updated successfully", assignments)));
         });
     }
 
@@ -486,6 +618,53 @@ public class AdminConsoleEndpoint {
         });
     }
 
+    @GET
+    @Path("/users/{userId}/clients")
+    @Produces(MediaType.TEXT_HTML)
+    public Uni<Response> userClients(@PathParam("userId") UUID userId,
+                                     @Context ContainerRequestContext requestContext) {
+        AdminSessionData session = session(requestContext);
+        return adminUserService.get(userId).flatMap(result -> {
+            if (!result.isSuccess()) {
+                return Uni.createFrom().item(notFound());
+            }
+            return membershipService.listClientsForUser(userId)
+                    .map(assignments -> renderUserDetail(session, userId, "clients",
+                            result.value(), null, null, assignments));
+        });
+    }
+
+    @POST
+    @Path("/users/{userId}/clients")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    @Produces(MediaType.TEXT_HTML)
+    public Uni<Response> updateUserClients(
+            @PathParam("userId") UUID userId,
+            @FormParam("csrf_token") String csrfToken,
+            @FormParam("client_ids") List<String> clientIds,
+            @Context ContainerRequestContext requestContext) {
+
+        AdminSessionData session = session(requestContext);
+        if (!authService.validateCsrf(session, csrfToken)) {
+            return Uni.createFrom().item(forbiddenCsrf());
+        }
+
+        return membershipService.replaceUserClients(userId, clientIds).flatMap(result -> {
+            if (!result.isSuccess()) {
+                return adminUserService.get(userId).flatMap(userResult ->
+                        membershipService.listClientsForUser(userId)
+                                .map(assignments -> renderUserDetail(session, userId, "clients",
+                                        userResult.isSuccess() ? userResult.value() : null,
+                                        errorMessage(result), null, assignments)));
+            }
+            return adminUserService.get(userId).flatMap(userResult ->
+                    membershipService.listClientsForUser(userId)
+                            .map(assignments -> renderUserDetail(session, userId, "clients",
+                                    userResult.isSuccess() ? userResult.value() : null,
+                                    null, "Client assignments updated successfully", assignments)));
+        });
+    }
+
     private Uni<AdminFlashData> consumeFlash(String sessionId) {
         return authService.consumeFlash(sessionId);
     }
@@ -493,14 +672,23 @@ public class AdminConsoleEndpoint {
     private Response renderClientDetail(AdminSessionData session, String clientId, String activeTab,
                                         ClientRegistrationResponse client, AdminFlashData flash,
                                         String error, String success) {
+        return renderClientDetail(session, clientId, activeTab, client, flash, error, success, null);
+    }
+
+    private Response renderClientDetail(AdminSessionData session, String clientId, String activeTab,
+                                        ClientRegistrationResponse client, AdminFlashData flash,
+                                        String error, String success,
+                                        List<MembershipAssignmentView> assignments) {
         List<Map<String, String>> breadcrumbs = List.of(
                 breadcrumb("Clients", "/admin/console/clients"),
                 breadcrumb(clientId, "/admin/console/clients/" + clientId + "/settings"),
                 breadcrumb(capitalize(activeTab), null));
 
-        Template contentTemplate = "settings".equals(activeTab)
-                ? adminConsoleClientsDetailSettings
-                : adminConsoleClientsDetailCredentials;
+        Template contentTemplate = switch (activeTab) {
+            case "settings" -> adminConsoleClientsDetailSettings;
+            case "users" -> adminConsoleClientsDetailUsers;
+            default -> adminConsoleClientsDetailCredentials;
+        };
 
         Map<String, Object> data = new HashMap<>();
         data.put("client", client);
@@ -509,21 +697,32 @@ public class AdminConsoleEndpoint {
         data.put("flash", flash);
         data.put("error", error);
         data.put("success", success);
+        if (assignments != null) {
+            data.put("assignments", assignments);
+        }
 
         return renderLayout(session, "clients", clientId, breadcrumbs, contentTemplate, data);
     }
 
     private Response renderUserDetail(AdminSessionData session, UUID userId, String activeTab,
                                       UserResponse user, String error, String success) {
+        return renderUserDetail(session, userId, activeTab, user, error, success, null);
+    }
+
+    private Response renderUserDetail(AdminSessionData session, UUID userId, String activeTab,
+                                      UserResponse user, String error, String success,
+                                      List<MembershipAssignmentView> assignments) {
         List<Map<String, String>> breadcrumbs = List.of(
                 breadcrumb("Users", "/admin/console/users"),
                 breadcrumb(user != null ? user.getUsername() : userId.toString(),
                         "/admin/console/users/" + userId + "/details"),
                 breadcrumb(capitalize(activeTab), null));
 
-        Template contentTemplate = "details".equals(activeTab)
-                ? adminConsoleUsersDetailDetails
-                : adminConsoleUsersDetailCredentials;
+        Template contentTemplate = switch (activeTab) {
+            case "details" -> adminConsoleUsersDetailDetails;
+            case "clients" -> adminConsoleUsersDetailClients;
+            default -> adminConsoleUsersDetailCredentials;
+        };
 
         Map<String, Object> data = new HashMap<>();
         data.put("user", user);
@@ -531,6 +730,9 @@ public class AdminConsoleEndpoint {
         data.put("activeTab", activeTab);
         data.put("error", error);
         data.put("success", success);
+        if (assignments != null) {
+            data.put("assignments", assignments);
+        }
 
         return renderLayout(session, "users",
                 user != null ? user.getUsername() : "User", breadcrumbs, contentTemplate, data);
@@ -605,6 +807,26 @@ public class AdminConsoleEndpoint {
                 .filter(u -> u.getUsername().toLowerCase(Locale.ROOT).contains(q)
                         || (u.getEmail() != null && u.getEmail().toLowerCase(Locale.ROOT).contains(q)))
                 .collect(Collectors.toList());
+    }
+
+    private static Integer parseOptionalPositiveInt(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return Integer.parseInt(value.trim());
+    }
+
+    private static List<UUID> parseUserIds(List<String> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> parsed = new ArrayList<>();
+        for (String userId : userIds) {
+            if (userId != null && !userId.isBlank()) {
+                parsed.add(UUID.fromString(userId.trim()));
+            }
+        }
+        return parsed.stream().distinct().toList();
     }
 
     private static List<String> splitLines(String value) {

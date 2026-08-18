@@ -1,15 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   decodeJwt,
+  ensureValidAccessToken,
+  getMsUntilAccessTokenRefresh,
   getStoredTokens,
   introspectAccessToken,
   logout,
+  redirectToLogin,
   refreshAccessToken,
+  SessionExpiredError,
 } from '../auth';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const refreshTimerRef = useRef(null);
   const [tokens, setTokens] = useState(getStoredTokens());
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
@@ -20,23 +25,86 @@ export default function Dashboard() {
   const idClaims = decodeJwt(tokens.idToken);
   const accessClaims = decodeJwt(tokens.accessToken);
 
-  async function runIntrospection() {
-    setIntrospecting(true);
+  const runIntrospection = useCallback(async (silent = false) => {
+    if (!silent) {
+      setIntrospecting(true);
+    }
     setError(null);
     try {
       const result = await introspectAccessToken();
       setIntrospection(result);
     } catch (err) {
+      if (err instanceof SessionExpiredError) {
+        redirectToLogin();
+        return;
+      }
       setError(err.message);
       setIntrospection(null);
     } finally {
-      setIntrospecting(false);
+      if (!silent) {
+        setIntrospecting(false);
+      }
     }
-  }
+  }, []);
+
+  const scheduleAutoRefresh = useCallback(() => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+    }
+
+    const delay = getMsUntilAccessTokenRefresh();
+    refreshTimerRef.current = setTimeout(async () => {
+      try {
+        await ensureValidAccessToken();
+        setTokens(getStoredTokens());
+        setMessage('Session refreshed automatically.');
+        await runIntrospection(true);
+        scheduleAutoRefresh();
+      } catch (err) {
+        if (err instanceof SessionExpiredError) {
+          redirectToLogin();
+        } else {
+          setError(err.message);
+        }
+      }
+    }, delay);
+  }, [runIntrospection]);
 
   useEffect(() => {
-    runIntrospection();
-  }, []);
+    let cancelled = false;
+
+    async function init() {
+      try {
+        await ensureValidAccessToken();
+        if (cancelled) {
+          return;
+        }
+        setTokens(getStoredTokens());
+        await runIntrospection();
+        if (!cancelled) {
+          scheduleAutoRefresh();
+        }
+      } catch (err) {
+        if (cancelled) {
+          return;
+        }
+        if (err instanceof SessionExpiredError) {
+          redirectToLogin();
+        } else {
+          setError(err.message);
+        }
+      }
+    }
+
+    init();
+
+    return () => {
+      cancelled = true;
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+    };
+  }, [runIntrospection, scheduleAutoRefresh]);
 
   async function onRefresh() {
     setError(null);
@@ -46,7 +114,12 @@ export default function Dashboard() {
       setTokens(getStoredTokens());
       setMessage('Tokens refreshed.');
       await runIntrospection();
+      scheduleAutoRefresh();
     } catch (err) {
+      if (err instanceof SessionExpiredError) {
+        redirectToLogin();
+        return;
+      }
       setError(err.message);
     }
   }
@@ -54,6 +127,9 @@ export default function Dashboard() {
   async function onLogout() {
     setLoggingOut(true);
     setError(null);
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+    }
     try {
       await logout();
     } catch (err) {
@@ -111,7 +187,7 @@ export default function Dashboard() {
           </>
         )}
 
-        <button type="button" onClick={runIntrospection} disabled={introspecting}>
+        <button type="button" onClick={() => runIntrospection()} disabled={introspecting}>
           {introspecting ? 'Introspecting…' : 'Introspect again'}
         </button>
       </section>

@@ -1,0 +1,44 @@
+{#if success}
+<div class="pf-c-alert pf-m-success">{success}</div>
+{/if}
+{#if error}
+<div class="pf-c-alert pf-m-danger">{error}</div>
+{/if}
+
+<form method="post" action="/admin/console/settings">
+    <input type="hidden" name="csrf_token" value="{csrfToken}">
+
+    <p>Global OAuth session cookie and default token lifetimes. Per-client overrides are configured on each client’s Settings tab.</p>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="oauth_session_cookie_name">OAuth session cookie name *</label>
+        <input class="pf-c-form-control" type="text" id="oauth_session_cookie_name" name="oauth_session_cookie_name"
+               value="{settings.oauthSessionCookieName}" required pattern="[A-Za-z0-9_-]+">
+        <div class="pf-c-form__helper">Browser cookie for the login session at the authorization server (default: SESSIONID)</div>
+    </div>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="oauth_session_lifetime_seconds">OAuth session lifetime (seconds) *</label>
+        <input class="pf-c-form-control" type="number" id="oauth_session_lifetime_seconds" name="oauth_session_lifetime_seconds"
+               value="{settings.oauthSessionLifetimeSeconds}" min="1" required>
+    </div>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="default_access_token_lifetime_seconds">Default access token lifetime (seconds) *</label>
+        <input class="pf-c-form-control" type="number" id="default_access_token_lifetime_seconds"
+               name="default_access_token_lifetime_seconds" value="{settings.defaultAccessTokenLifetimeSeconds}" min="1" required>
+    </div>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="default_refresh_token_lifetime_seconds">Default refresh token lifetime (seconds) *</label>
+        <input class="pf-c-form-control" type="number" id="default_refresh_token_lifetime_seconds"
+               name="default_refresh_token_lifetime_seconds" value="{settings.defaultRefreshTokenLifetimeSeconds}" min="1" required>
+    </div>
+
+    <div class="pf-c-form__group pf-c-checkbox">
+        <label><input type="checkbox" name="session_cookie_secure" {#if settings.sessionCookieSecure}checked{/if}> Secure cookie flag</label>
+        <div class="pf-c-form__helper">Requires HTTPS when enabled</div>
+    </div>
+
+    <button class="pf-c-button pf-m-primary" type="submit">Save</button>
+</form>

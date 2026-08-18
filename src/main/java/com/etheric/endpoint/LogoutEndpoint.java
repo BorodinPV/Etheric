@@ -32,7 +32,7 @@ public class LogoutEndpoint {
 
     @GET
     public Uni<Response> logout(@QueryParam("redirect_uri") String redirectUri, @Context HttpHeaders headers) {
-        String sessionId = SessionCookieFactory.extractSessionId(headers);
+        String sessionId = sessionCookieFactory.extractSessionId(headers);
 
         Uni<Void> deleteSession = sessionId != null
                 ? cacheService.deleteSession(sessionId)

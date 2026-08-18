@@ -52,12 +52,30 @@ public class Client extends PanacheEntityBase {
     @Column(name = "client_description")
     public String clientDescription;
 
+    @Column(name = "access_token_lifetime_seconds")
+    public Integer accessTokenLifetimeSeconds;
+
+    @Column(name = "refresh_token_lifetime_seconds")
+    public Integer refreshTokenLifetimeSeconds;
+
+    @Column(name = "session_lifetime_seconds")
+    public Integer sessionLifetimeSeconds;
+
     public Client() {
     }
 
     public Client(UUID id, String clientId, String clientSecretHash, String clientName,
                   List<String> redirectUris, List<String> scopes, List<String> grantTypes,
                   boolean enabled, OffsetDateTime createdAt, String clientDescription) {
+        this(id, clientId, clientSecretHash, clientName, redirectUris, scopes, grantTypes,
+                enabled, createdAt, clientDescription, null, null, null);
+    }
+
+    public Client(UUID id, String clientId, String clientSecretHash, String clientName,
+                  List<String> redirectUris, List<String> scopes, List<String> grantTypes,
+                  boolean enabled, OffsetDateTime createdAt, String clientDescription,
+                  Integer accessTokenLifetimeSeconds, Integer refreshTokenLifetimeSeconds,
+                  Integer sessionLifetimeSeconds) {
         this.id = id;
         this.clientId = clientId;
         this.clientSecretHash = clientSecretHash;
@@ -68,5 +86,8 @@ public class Client extends PanacheEntityBase {
         this.enabled = enabled;
         this.createdAt = createdAt;
         this.clientDescription = clientDescription;
+        this.accessTokenLifetimeSeconds = accessTokenLifetimeSeconds;
+        this.refreshTokenLifetimeSeconds = refreshTokenLifetimeSeconds;
+        this.sessionLifetimeSeconds = sessionLifetimeSeconds;
     }
 }

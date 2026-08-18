@@ -150,6 +150,36 @@ public class AdminClientService {
         });
     }
 
+    public Uni<AdminServiceResult<ClientRegistrationResponse>> updateTokenLifetimes(
+            String clientId, Integer accessTokenLifetimeSeconds,
+            Integer refreshTokenLifetimeSeconds, Integer sessionLifetimeSeconds) {
+        if (accessTokenLifetimeSeconds != null && accessTokenLifetimeSeconds <= 0) {
+            return Uni.createFrom().item(AdminServiceResult.badRequest(
+                    "invalid_request", "access_token_lifetime_seconds must be positive"));
+        }
+        if (refreshTokenLifetimeSeconds != null && refreshTokenLifetimeSeconds <= 0) {
+            return Uni.createFrom().item(AdminServiceResult.badRequest(
+                    "invalid_request", "refresh_token_lifetime_seconds must be positive"));
+        }
+        if (sessionLifetimeSeconds != null && sessionLifetimeSeconds <= 0) {
+            return Uni.createFrom().item(AdminServiceResult.badRequest(
+                    "invalid_request", "session_lifetime_seconds must be positive"));
+        }
+
+        return clientRepository.findByClientId(clientId).flatMap(opt -> {
+            if (opt.isEmpty()) {
+                return Uni.createFrom().item(AdminServiceResult.notFound("not_found", "Client not found"));
+            }
+            Client client = opt.get();
+            client.accessTokenLifetimeSeconds = accessTokenLifetimeSeconds;
+            client.refreshTokenLifetimeSeconds = refreshTokenLifetimeSeconds;
+            client.sessionLifetimeSeconds = sessionLifetimeSeconds;
+            return clientRepository.updateClient(client)
+                    .flatMap(ignored -> clientRepository.findByClientId(clientId))
+                    .map(updated -> AdminServiceResult.ok(toResponse(updated.orElseThrow(), null)));
+        });
+    }
+
     public Uni<AdminServiceResult<ClientRegistrationResponse>> regenerateSecret(String clientId) {
         return clientRepository.findByClientId(clientId).flatMap(opt -> {
             if (opt.isEmpty()) {
@@ -166,6 +196,8 @@ public class AdminClientService {
     public static ClientRegistrationResponse toResponse(Client client, String plaintextSecret) {
         return new ClientRegistrationResponse(
                 client.clientId, plaintextSecret, client.clientName, client.redirectUris,
-                client.scopes, client.grantTypes, client.enabled, client.clientDescription);
+                client.scopes, client.grantTypes, client.enabled, client.clientDescription,
+                client.accessTokenLifetimeSeconds, client.refreshTokenLifetimeSeconds,
+                client.sessionLifetimeSeconds);
     }
 }

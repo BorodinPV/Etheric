@@ -90,6 +90,13 @@ class AdminConsolePagesTest {
                 .get("/admin/console/clients/test-client/credentials").then()
                 .statusCode(200).body(containsString("Credentials"));
 
+        given().cookie("ADMIN_SESSION", cookie)
+                .get("/admin/console/clients/test-client/users").then()
+                .statusCode(200).body(containsString("Users"));
+
+        given().cookie("ADMIN_SESSION", cookie).get("/admin/console/settings").then()
+                .statusCode(200).body(containsString("Server settings"));
+
         given().cookie("ADMIN_SESSION", cookie).get("/admin/console/users").then()
                 .statusCode(200).body(containsString("Users"));
 
@@ -111,6 +118,10 @@ class AdminConsolePagesTest {
         given().cookie("ADMIN_SESSION", cookie)
                 .get("/admin/console/users/" + adminUserId + "/credentials").then()
                 .statusCode(200).body(containsString("Credentials"));
+
+        given().cookie("ADMIN_SESSION", cookie)
+                .get("/admin/console/users/" + adminUserId + "/clients").then()
+                .statusCode(200).body(containsString("Clients"));
     }
 
     @Test

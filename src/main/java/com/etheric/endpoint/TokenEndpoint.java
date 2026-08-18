@@ -1,6 +1,6 @@
 package com.etheric.endpoint;
 
-import com.etheric.config.EthericTtlConfig;
+import com.etheric.service.TokenPolicyService;
 import com.etheric.entity.Client;
 import com.etheric.exception.OAuthError;
 import com.etheric.exception.OAuthException;
@@ -51,7 +51,7 @@ public class TokenEndpoint {
     AuthorizationCodeService authorizationCodeService;
 
     @Inject
-    EthericTtlConfig ttlConfig;
+    TokenPolicyService tokenPolicyService;
 
     @POST
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
@@ -169,39 +169,45 @@ public class TokenEndpoint {
 
     private Uni<Response> issueTokenResponse(String userId, String clientId,
                                              List<String> grantedScopes, String nonce) {
-        long accessTtl = ttlConfig.accessTokenLifetime();
-        long refreshTtl = ttlConfig.refreshTokenLifetime();
         boolean includeIdToken = grantedScopes.contains("openid");
 
-        return resolveRoles(userId).flatMap(roles -> {
-            String accessToken = jwtService.generateAccessToken(userId, roles, grantedScopes);
-            String refreshToken = jwtService.generateRefreshToken(userId, roles, grantedScopes);
+        return tokenPolicyService.resolveForClient(clientId).flatMap(lifetimes -> {
+            long accessTtl = lifetimes.getAccessTokenLifetimeSeconds();
+            long refreshTtl = lifetimes.getRefreshTokenLifetimeSeconds();
 
-            Uni<String> idTokenUni = includeIdToken
-                    ? resolveIdToken(userId, clientId, nonce, grantedScopes)
-                    : Uni.createFrom().nullItem();
+            return resolveRoles(userId).flatMap(roles -> {
+                String accessToken = jwtService.generateAccessToken(userId, roles, grantedScopes, accessTtl);
+                String refreshToken = jwtService.generateRefreshToken(userId, roles, grantedScopes, refreshTtl);
 
-            return idTokenUni.flatMap(idToken ->
-                    cacheService.saveAccessToken(accessToken, new AccessTokenData(
-                                    userId, clientId, grantedScopes, System.currentTimeMillis() / 1000 + accessTtl), accessTtl)
-                            .flatMap(v -> cacheService.saveRefreshToken(refreshToken,
-                                    new RefreshTokenData(userId, clientId, grantedScopes), refreshTtl))
-                            .replaceWith(Response.ok(new TokenResponse(
-                                    accessToken, "Bearer", accessTtl, refreshToken,
-                                    String.join(" ", grantedScopes), idToken)).build()));
+                Uni<String> idTokenUni = includeIdToken
+                        ? resolveIdToken(userId, clientId, nonce, grantedScopes, accessTtl)
+                        : Uni.createFrom().nullItem();
+
+                return idTokenUni.flatMap(idToken ->
+                        cacheService.saveAccessToken(accessToken, new AccessTokenData(
+                                        userId, clientId, grantedScopes, System.currentTimeMillis() / 1000 + accessTtl), accessTtl)
+                                .flatMap(v -> cacheService.saveRefreshToken(refreshToken,
+                                        new RefreshTokenData(userId, clientId, grantedScopes), refreshTtl))
+                                .replaceWith(Response.ok(new TokenResponse(
+                                        accessToken, "Bearer", accessTtl, refreshToken,
+                                        String.join(" ", grantedScopes), idToken)).build()));
+            });
         });
     }
 
-    private Uni<String> resolveIdToken(String userId, String clientId, String nonce, List<String> scopes) {
+    private Uni<String> resolveIdToken(String userId, String clientId, String nonce, List<String> scopes,
+                                       long lifetimeSeconds) {
         try {
             UUID userUuid = UUID.fromString(userId);
             return userRepository.findUserById(userUuid)
                     .map(opt -> jwtService.generateIdToken(
                             userId, clientId, nonce, scopes,
                             opt.map(u -> u.email).orElse(null),
-                            opt.map(u -> u.username).orElse(null)));
+                            opt.map(u -> u.username).orElse(null),
+                            lifetimeSeconds));
         } catch (IllegalArgumentException e) {
-            return Uni.createFrom().item(jwtService.generateIdToken(userId, clientId, nonce, scopes, null, null));
+            return Uni.createFrom().item(jwtService.generateIdToken(
+                    userId, clientId, nonce, scopes, null, null, lifetimeSeconds));
         }
     }
 

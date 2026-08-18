@@ -9,6 +9,18 @@ const STORAGE_KEYS = {
   oauthState: 'etheric_oauth_state',
 };
 
+/** Refresh access token this many seconds before JWT exp. */
+export const REFRESH_SKEW_SECONDS = 60;
+
+export class SessionExpiredError extends Error {
+  constructor(message = 'Session expired') {
+    super(message);
+    this.name = 'SessionExpiredError';
+  }
+}
+
+let refreshInFlight = null;
+
 function randomString(length) {
   const bytes = crypto.getRandomValues(new Uint8Array(length));
   return Array.from(bytes, (b) => (b % 36).toString(36)).join('');
@@ -133,6 +145,59 @@ export function decodeJwt(token) {
   return JSON.parse(json);
 }
 
+export function isTokenExpired(token, skewSeconds = 0) {
+  const claims = decodeJwt(token);
+  if (!claims?.exp) {
+    return true;
+  }
+  return Date.now() / 1000 >= claims.exp - skewSeconds;
+}
+
+export function hasValidSession() {
+  const { accessToken, refreshToken, idToken } = getStoredTokens();
+  if (!idToken) {
+    return false;
+  }
+  if (refreshToken && !isTokenExpired(refreshToken)) {
+    return true;
+  }
+  return Boolean(accessToken && !isTokenExpired(accessToken));
+}
+
+export function getMsUntilAccessTokenRefresh() {
+  const { accessToken } = getStoredTokens();
+  const claims = decodeJwt(accessToken);
+  if (!claims?.exp) {
+    return 0;
+  }
+  return Math.max(0, (claims.exp - REFRESH_SKEW_SECONDS) * 1000 - Date.now());
+}
+
+export function redirectToLogin() {
+  clearTokens();
+  window.location.href = '/';
+}
+
+export async function ensureValidAccessToken() {
+  const { accessToken, refreshToken } = getStoredTokens();
+
+  if (accessToken && !isTokenExpired(accessToken, REFRESH_SKEW_SECONDS)) {
+    return accessToken;
+  }
+
+  if (!refreshToken || isTokenExpired(refreshToken)) {
+    throw new SessionExpiredError();
+  }
+
+  if (!refreshInFlight) {
+    refreshInFlight = refreshAccessToken().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  await refreshInFlight;
+  return sessionStorage.getItem(STORAGE_KEYS.accessToken);
+}
+
 export async function refreshAccessToken() {
   const refreshToken = sessionStorage.getItem(STORAGE_KEYS.refreshToken);
   if (!refreshToken) {
@@ -153,6 +218,9 @@ export async function refreshAccessToken() {
 
   const data = await response.json();
   if (!response.ok) {
+    if (data.error === 'invalid_grant') {
+      throw new SessionExpiredError(data.error_description || 'Session expired');
+    }
     throw new Error(data.error_description || data.error || 'Refresh failed');
   }
 
@@ -161,7 +229,7 @@ export async function refreshAccessToken() {
 }
 
 export async function introspectAccessToken(token) {
-  const accessToken = token ?? sessionStorage.getItem(STORAGE_KEYS.accessToken);
+  const accessToken = token ?? (await ensureValidAccessToken());
   if (!accessToken) {
     throw new Error('No access token available');
   }

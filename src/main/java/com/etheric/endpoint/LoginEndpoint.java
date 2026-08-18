@@ -1,9 +1,13 @@
 package com.etheric.endpoint;
 
 import com.etheric.config.EthericTtlConfig;
+import com.etheric.service.TokenPolicyService;
 import com.etheric.model.SessionData;
 import com.etheric.repository.UserRepository;
+import com.etheric.exception.OAuthError;
+import com.etheric.exception.OAuthException;
 import com.etheric.service.AuthorizationCodeService;
+import com.etheric.service.UserClientMembershipService;
 import com.etheric.service.CacheService;
 import com.etheric.util.OAuthRedirectBuilder;
 import com.etheric.util.ScopeUtil;
@@ -41,12 +45,18 @@ public class LoginEndpoint {
     SessionCookieFactory sessionCookieFactory;
 
     @Inject
+    TokenPolicyService tokenPolicyService;
+
+    @Inject
     EthericTtlConfig ttlConfig;
+
+    @Inject
+    UserClientMembershipService membershipService;
 
     @GET
     @Produces(MediaType.TEXT_HTML)
     public Uni<Response> getLogin(@QueryParam("state") String state, @Context HttpHeaders headers) {
-        String sessionId = SessionCookieFactory.extractSessionId(headers);
+        String sessionId = sessionCookieFactory.extractSessionId(headers);
         if (sessionId != null) {
             return cacheService.getSession(sessionId).flatMap(session -> {
                 if (session != null) {
@@ -73,7 +83,7 @@ public class LoginEndpoint {
             @FormParam("csrf_token") String csrfToken,
             @Context HttpHeaders headers) {
 
-        String sessionId = SessionCookieFactory.extractSessionId(headers);
+        String sessionId = sessionCookieFactory.extractSessionId(headers);
         if (sessionId == null) {
             return Uni.createFrom().item(Response.status(Response.Status.FORBIDDEN)
                     .entity("Invalid CSRF token").build());
@@ -96,29 +106,44 @@ public class LoginEndpoint {
     private Uni<Response> renderLoginError(String sessionId, SessionData session, String state) {
         String newCsrfToken = UUID.randomUUID().toString();
         session.setCsrfToken(newCsrfToken);
-        return cacheService.saveSession(sessionId, session, ttlConfig.sessionLifetime())
-                .replaceWith(buildLoginResponse(sessionId, state, newCsrfToken,
-                        "Неверное имя пользователя или пароль", false));
+        return resolveSessionLifetime(state).flatMap(sessionLifetime ->
+                cacheService.saveSession(sessionId, session, sessionLifetime)
+                        .replaceWith(buildLoginResponse(sessionId, state, newCsrfToken,
+                                "Неверное имя пользователя или пароль", false)));
     }
 
     private Uni<Response> handleSuccessfulLogin(String userId, String state) {
         String newSessionId = UUID.randomUUID().toString();
-        return cacheService.saveSession(newSessionId,
-                        new SessionData(userId, null, System.currentTimeMillis()), ttlConfig.sessionLifetime())
-                .flatMap(v -> {
-                    if (state == null) {
-                        return Uni.createFrom().voidItem();
+        return resolveSessionLifetime(state).flatMap(sessionLifetime ->
+                cacheService.saveSession(newSessionId,
+                                new SessionData(userId, null, System.currentTimeMillis()), sessionLifetime)
+                        .flatMap(v -> {
+                            if (state == null) {
+                                return Uni.createFrom().voidItem();
+                            }
+                            return cacheService.getAuthorizationRequestState(state).flatMap(requestState -> {
+                                if (requestState == null) {
+                                    return Uni.createFrom().voidItem();
+                                }
+                                requestState.setUserId(userId);
+                                return cacheService.saveAuthorizationRequestState(state, requestState,
+                                        ttlConfig.requestStateLifetime()).replaceWithVoid();
+                            });
+                        })
+                        .flatMap(v -> resolvePostLoginRedirect(newSessionId, userId, state)));
+    }
+
+    private Uni<Long> resolveSessionLifetime(String state) {
+        if (state == null) {
+            return Uni.createFrom().item(tokenPolicyService.oauthSessionLifetimeSeconds());
+        }
+        return cacheService.getAuthorizationRequestState(state)
+                .flatMap(requestState -> {
+                    if (requestState == null) {
+                        return Uni.createFrom().item(tokenPolicyService.oauthSessionLifetimeSeconds());
                     }
-                    return cacheService.getAuthorizationRequestState(state).flatMap(requestState -> {
-                        if (requestState == null) {
-                            return Uni.createFrom().voidItem();
-                        }
-                        requestState.setUserId(userId);
-                        return cacheService.saveAuthorizationRequestState(state, requestState,
-                                ttlConfig.requestStateLifetime()).replaceWithVoid();
-                    });
-                })
-                .flatMap(v -> resolvePostLoginRedirect(newSessionId, userId, state));
+                    return tokenPolicyService.resolveSessionLifetimeForClient(requestState.getClientId());
+                });
     }
 
     private Uni<Response> resolvePostLoginRedirect(String newSessionId, String userId, String state) {
@@ -129,14 +154,20 @@ public class LoginEndpoint {
             if (requestState == null) {
                 return Uni.createFrom().item(buildLoginRedirect(newSessionId, state, "/consent"));
             }
-            return cacheService.getConsent(userId, requestState.getClientId()).flatMap(consent -> {
-                if (consent != null && ScopeUtil.coversScopes(consent.getScopes(), requestState.getScope())) {
-                    return authorizationCodeService.issueCodeAndRedirect(userId, requestState, state)
-                            .map(response -> Response.seeOther(response.getLocation())
-                                    .header("Set-Cookie", sessionCookieFactory.create(newSessionId))
-                                    .build());
+            return membershipService.isMember(userId, requestState.getClientId()).flatMap(member -> {
+                if (!member) {
+                    return Uni.createFrom().failure(new OAuthException(
+                            OAuthError.ACCESS_DENIED, requestState.getRedirectUri(), state));
                 }
-                return Uni.createFrom().item(buildLoginRedirect(newSessionId, state, "/consent"));
+                return cacheService.getConsent(userId, requestState.getClientId()).flatMap(consent -> {
+                    if (consent != null && ScopeUtil.coversScopes(consent.getScopes(), requestState.getScope())) {
+                        return authorizationCodeService.issueCodeAndRedirect(userId, requestState, state)
+                                .map(response -> Response.seeOther(response.getLocation())
+                                        .header("Set-Cookie", sessionCookieFactory.create(newSessionId))
+                                        .build());
+                    }
+                    return Uni.createFrom().item(buildLoginRedirect(newSessionId, state, "/consent"));
+                });
             });
         });
     }
@@ -153,8 +184,9 @@ public class LoginEndpoint {
     private Uni<Response> renderLoginPage(String sessionId, SessionData session, String state, boolean issueCookie) {
         String csrfToken = UUID.randomUUID().toString();
         session.setCsrfToken(csrfToken);
-        return cacheService.saveSession(sessionId, session, ttlConfig.sessionLifetime())
-                .replaceWith(buildLoginResponse(sessionId, state, csrfToken, null, issueCookie));
+        return resolveSessionLifetime(state).flatMap(sessionLifetime ->
+                cacheService.saveSession(sessionId, session, sessionLifetime)
+                        .replaceWith(buildLoginResponse(sessionId, state, csrfToken, null, issueCookie)));
     }
 
     private Response buildLoginResponse(String sessionId, String state, String csrfToken,

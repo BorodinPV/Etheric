@@ -1,11 +1,15 @@
 package com.etheric.bootstrap;
 
 import com.etheric.entity.Client;
+import com.etheric.entity.ServerSettings;
+import com.etheric.repository.ServerSettingsRepository;
 import com.etheric.entity.User;
 import com.etheric.repository.ClientRepository;
 import com.etheric.repository.UserRepository;
 import com.etheric.service.AdminConsoleAuthService;
 import com.etheric.service.PasswordService;
+import com.etheric.service.TokenPolicyService;
+import com.etheric.service.UserClientMembershipService;
 import io.quarkus.arc.profile.IfBuildProfile;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
 import io.quarkus.runtime.StartupEvent;
@@ -49,10 +53,19 @@ public class DevSeedService {
     ClientRepository clientRepository;
 
     @Inject
+    ServerSettingsRepository serverSettingsRepository;
+
+    @Inject
+    TokenPolicyService tokenPolicyService;
+
+    @Inject
     UserRepository userRepository;
 
     @Inject
     PasswordService passwordService;
+
+    @Inject
+    UserClientMembershipService membershipService;
 
     @Inject
     @ConfigProperty(name = "quarkus.profile")
@@ -63,9 +76,12 @@ public class DevSeedService {
             VertxContextSupport.subscribeAndAwait(() ->
                     seedIfEmpty()
                             .chain(v -> normalizeDevSeedIfDev())
+                            .chain(v -> ensureDevServerSettings())
+                            .chain(v -> ensureTestServerSettings())
                             .chain(v -> ensureDevClient())
                             .chain(v -> ensureDevUser())
-                            .chain(v -> ensureAdminUser()));
+                            .chain(v -> ensureAdminUser())
+                            .chain(v -> ensureDevMemberships()));
             LOG.info("Dev seed check completed");
         } catch (Throwable error) {
             LOG.error("Dev seed failed", error);
@@ -108,6 +124,46 @@ public class DevSeedService {
                     }
                     return Uni.createFrom().voidItem();
                 });
+    }
+
+    @WithTransaction
+    Uni<Void> ensureDevServerSettings() {
+        if (!"dev".equals(quarkusProfile)) {
+            return Uni.createFrom().voidItem();
+        }
+        return serverSettingsRepository.getSettings().flatMap(settings -> {
+            if (settings == null) {
+                return Uni.createFrom().voidItem();
+            }
+            if (!settings.sessionCookieSecure) {
+                return Uni.createFrom().voidItem();
+            }
+            settings.sessionCookieSecure = false;
+            settings.updatedAt = OffsetDateTime.now();
+            LOG.info("Applying dev profile: session_cookie_secure=false in server_settings");
+            return serverSettingsRepository.updateSettings(settings)
+                    .flatMap(v -> tokenPolicyService.refreshCache());
+        });
+    }
+
+    @WithTransaction
+    Uni<Void> ensureTestServerSettings() {
+        if (!"test".equals(quarkusProfile)) {
+            return Uni.createFrom().voidItem();
+        }
+        return serverSettingsRepository.getSettings().flatMap(settings -> {
+            if (settings == null) {
+                return Uni.createFrom().voidItem();
+            }
+            if (settings.sessionCookieSecure) {
+                return Uni.createFrom().voidItem();
+            }
+            settings.sessionCookieSecure = true;
+            settings.updatedAt = OffsetDateTime.now();
+            LOG.info("Applying test profile: session_cookie_secure=true in server_settings");
+            return serverSettingsRepository.updateSettings(settings)
+                    .flatMap(v -> tokenPolicyService.refreshCache());
+        });
     }
 
     @WithTransaction
@@ -183,6 +239,21 @@ public class DevSeedService {
             }
             LOG.info("Creating dev admin user (admin/admin)");
             return userRepository.persist(createAdminUser()).replaceWithVoid();
+        });
+    }
+
+    Uni<Void> ensureDevMemberships() {
+        return userRepository.findByUsername("user").flatMap(userOpt -> {
+            if (userOpt.isEmpty()) {
+                return Uni.createFrom().voidItem();
+            }
+            Uni<Void> chain = membershipService.ensureMembership(userOpt.get().id, DEV_CLIENT_ID);
+            return userRepository.findByUsername("admin").flatMap(adminOpt -> {
+                if (adminOpt.isEmpty()) {
+                    return chain;
+                }
+                return chain.chain(v -> membershipService.ensureMembership(adminOpt.get().id, DEV_CLIENT_ID));
+            });
         });
     }
 

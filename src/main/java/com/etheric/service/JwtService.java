@@ -160,23 +160,29 @@ public class JwtService {
     }
 
     public String generateAccessToken(String userId, List<String> roles, List<String> scopes) {
+        return generateAccessToken(userId, roles, scopes, ttlConfig.accessTokenLifetime());
+    }
+
+    public String generateAccessToken(String userId, List<String> roles, List<String> scopes, long lifetimeSeconds) {
         long now = System.currentTimeMillis() / 1000;
-        long expiry = ttlConfig.accessTokenLifetime();
 
         return Jwt.issuer(ttlConfig.issuer())
                 .claim(Claims.sub, userId)
                 .claim(Claims.groups, roles)
                 .claim("scopes", scopes)
                 .issuedAt(now)
-                .expiresAt(now + expiry)
+                .expiresAt(now + lifetimeSeconds)
                 .jws().algorithm(signatureAlgorithm)
                 .keyId(keyId)
                 .sign(privateKey);
     }
 
     public String generateRefreshToken(String userId, List<String> roles, List<String> scopes) {
+        return generateRefreshToken(userId, roles, scopes, ttlConfig.refreshTokenLifetime());
+    }
+
+    public String generateRefreshToken(String userId, List<String> roles, List<String> scopes, long lifetimeSeconds) {
         long now = System.currentTimeMillis() / 1000;
-        long expiry = ttlConfig.refreshTokenLifetime();
 
         return Jwt.issuer(ttlConfig.issuer())
                 .claim(Claims.sub, userId)
@@ -184,7 +190,7 @@ public class JwtService {
                 .claim("scopes", scopes)
                 .claim("token_type", "refresh")
                 .issuedAt(now)
-                .expiresAt(now + expiry)
+                .expiresAt(now + lifetimeSeconds)
                 .jws().algorithm(signatureAlgorithm)
                 .keyId(keyId)
                 .sign(privateKey);
@@ -192,14 +198,18 @@ public class JwtService {
 
     public String generateIdToken(String userId, String clientId, String nonce,
                                   List<String> scopes, String email, String username) {
+        return generateIdToken(userId, clientId, nonce, scopes, email, username, ttlConfig.accessTokenLifetime());
+    }
+
+    public String generateIdToken(String userId, String clientId, String nonce,
+                                  List<String> scopes, String email, String username, long lifetimeSeconds) {
         long now = System.currentTimeMillis() / 1000;
-        long expiry = ttlConfig.accessTokenLifetime();
 
         JwtClaimsBuilder builder = Jwt.issuer(ttlConfig.issuer())
                 .subject(userId)
                 .audience(clientId)
                 .issuedAt(now)
-                .expiresAt(now + expiry)
+                .expiresAt(now + lifetimeSeconds)
                 .claim("auth_time", now);
 
         if (nonce != null && !nonce.isBlank()) {

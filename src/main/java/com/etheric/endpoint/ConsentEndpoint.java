@@ -1,6 +1,9 @@
 package com.etheric.endpoint;
 
-import com.etheric.config.EthericTtlConfig;
+import com.etheric.exception.OAuthError;
+import com.etheric.exception.OAuthException;
+import com.etheric.service.TokenPolicyService;
+import com.etheric.service.UserClientMembershipService;
 import com.etheric.model.ConsentData;
 import com.etheric.model.SessionData;
 import com.etheric.repository.UserRepository;
@@ -41,7 +44,13 @@ public class ConsentEndpoint {
     com.etheric.config.EthericCacheConfig cacheConfig;
 
     @Inject
-    EthericTtlConfig ttlConfig;
+    SessionCookieFactory sessionCookieFactory;
+
+    @Inject
+    TokenPolicyService tokenPolicyService;
+
+    @Inject
+    UserClientMembershipService membershipService;
 
     @GET
     @Produces(MediaType.TEXT_HTML)
@@ -50,7 +59,7 @@ public class ConsentEndpoint {
             return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST).build());
         }
 
-        String sessionId = SessionCookieFactory.extractSessionId(headers);
+        String sessionId = sessionCookieFactory.extractSessionId(headers);
         if (sessionId == null) {
             return Uni.createFrom().item(Response.seeOther(
                     OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
@@ -71,10 +80,18 @@ public class ConsentEndpoint {
                         return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST)
                                 .entity("Client not found").build());
                     }
-                    String csrfToken = UUID.randomUUID().toString();
-                    session.setCsrfToken(csrfToken);
-                    return cacheService.saveSession(sessionId, session, ttlConfig.sessionLifetime())
-                            .replaceWith(renderConsent(clientOpt.get(), requestState, state, csrfToken));
+                    return membershipService.isMember(session.getUserId(), requestState.getClientId())
+                            .flatMap(member -> {
+                                if (!member) {
+                                    return Uni.createFrom().failure(new OAuthException(
+                                            OAuthError.ACCESS_DENIED, requestState.getRedirectUri(), state));
+                                }
+                                String csrfToken = UUID.randomUUID().toString();
+                                session.setCsrfToken(csrfToken);
+                                return tokenPolicyService.resolveSessionLifetimeForClient(requestState.getClientId())
+                                        .flatMap(sessionLifetime -> cacheService.saveSession(sessionId, session, sessionLifetime)
+                                                .replaceWith(renderConsent(clientOpt.get(), requestState, state, csrfToken)));
+                            });
                 });
             });
         });
@@ -92,7 +109,7 @@ public class ConsentEndpoint {
             return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST).build());
         }
 
-        String sessionId = SessionCookieFactory.extractSessionId(headers);
+        String sessionId = sessionCookieFactory.extractSessionId(headers);
         if (sessionId == null) {
             return Uni.createFrom().item(Response.seeOther(
                     OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
@@ -122,10 +139,16 @@ public class ConsentEndpoint {
 
     private Uni<Response> handleApprove(SessionData session,
                                         com.etheric.model.AuthorizationRequestState requestState, String state) {
-        ConsentData consent = new ConsentData(requestState.getScope(), System.currentTimeMillis());
-        return cacheService.saveConsent(session.getUserId(), requestState.getClientId(), consent,
-                        cacheConfig.consentTtlSeconds())
-                .flatMap(v -> authorizationCodeService.issueCodeAndRedirect(session.getUserId(), requestState, state));
+        return membershipService.isMember(session.getUserId(), requestState.getClientId()).flatMap(member -> {
+            if (!member) {
+                return Uni.createFrom().failure(new OAuthException(
+                        OAuthError.ACCESS_DENIED, requestState.getRedirectUri(), state));
+            }
+            ConsentData consent = new ConsentData(requestState.getScope(), System.currentTimeMillis());
+            return cacheService.saveConsent(session.getUserId(), requestState.getClientId(), consent,
+                            cacheConfig.consentTtlSeconds())
+                    .flatMap(v -> authorizationCodeService.issueCodeAndRedirect(session.getUserId(), requestState, state));
+        });
     }
 
     private Uni<Response> handleDeny(com.etheric.model.AuthorizationRequestState requestState, String state) {

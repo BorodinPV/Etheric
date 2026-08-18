@@ -11,14 +11,25 @@
 <div class="pf-c-alert pf-m-danger">{error}</div>
 {/if}
 
-<form method="post" action="/admin/console/users/{userId}/credentials">
+<p>Select OAuth clients this user may access. A user must belong to a client to authorize with it.</p>
+
+<form method="post" action="/admin/console/users/{userId}/clients">
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
+    {#if assignments.isEmpty()}
+    <p>No clients registered yet.</p>
+    {#else}
     <div class="pf-c-form__group">
-        <label class="pf-c-form__label" for="new_password">New password</label>
-        <input class="pf-c-form-control" type="password" id="new_password" name="new_password" required minlength="8">
-        <div class="pf-c-form__helper">Minimum 8 characters</div>
+        {#for item in assignments}
+        <div class="pf-c-checkbox">
+            <label>
+                <input type="checkbox" name="client_ids" value="{item.id}" {#if item.assigned}checked{/if}>
+                {item.label}
+            </label>
+        </div>
+        {/for}
     </div>
+    {/if}
 
-    <button class="pf-c-button pf-m-primary" type="submit">Reset password</button>
+    <button class="pf-c-button pf-m-primary" type="submit">Save</button>
 </form>

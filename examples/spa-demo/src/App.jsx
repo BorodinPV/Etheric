@@ -2,11 +2,10 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Home from './pages/Home';
 import Callback from './pages/Callback';
 import Dashboard from './pages/Dashboard';
-import { getStoredTokens } from './auth';
+import { hasValidSession } from './auth';
 
 function RequireAuth({ children }) {
-  const { idToken } = getStoredTokens();
-  if (!idToken) {
+  if (!hasValidSession()) {
     return <Navigate to="/" replace />;
   }
   return children;

@@ -7,6 +7,7 @@ import com.etheric.exception.OAuthException;
 import com.etheric.model.AuthorizationRequestState;
 import com.etheric.repository.ClientRepository;
 import com.etheric.service.AuthorizationCodeService;
+import com.etheric.service.UserClientMembershipService;
 import com.etheric.service.CacheService;
 import com.etheric.util.OAuthRedirectBuilder;
 import com.etheric.util.PkceUtil;
@@ -47,6 +48,12 @@ public class AuthorizationEndpoint {
 
     @Inject
     EthericCacheConfig cacheConfig;
+
+    @Inject
+    SessionCookieFactory sessionCookieFactory;
+
+    @Inject
+    UserClientMembershipService membershipService;
 
     @GET
     public Uni<Response> authorize(
@@ -115,7 +122,7 @@ public class AuthorizationEndpoint {
 
     private Uni<AuthorizationRequestState> enrichWithSession(AuthorizationRequestState requestState,
                                                              String state, HttpHeaders headers) {
-        String sessionId = SessionCookieFactory.extractSessionId(headers);
+        String sessionId = sessionCookieFactory.extractSessionId(headers);
         if (sessionId == null) {
             return Uni.createFrom().item(requestState);
         }
@@ -134,14 +141,21 @@ public class AuthorizationEndpoint {
             return Uni.createFrom().item(Response.seeOther(
                     OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
         }
-        return cacheService.getConsent(requestState.getUserId(), requestState.getClientId())
-                .flatMap(consent -> {
-                    if (consent != null && ScopeUtil.coversScopes(consent.getScopes(), requestState.getScope())) {
-                        return authorizationCodeService.issueCodeAndRedirect(
-                                requestState.getUserId(), requestState, state);
+        return membershipService.isMember(requestState.getUserId(), requestState.getClientId())
+                .flatMap(member -> {
+                    if (!member) {
+                        return Uni.createFrom().failure(new OAuthException(
+                                OAuthError.ACCESS_DENIED, requestState.getRedirectUri(), state));
                     }
-                    return Uni.createFrom().item(Response.seeOther(
-                            OAuthRedirectBuilder.build("/consent", Map.of("state", state))).build());
+                    return cacheService.getConsent(requestState.getUserId(), requestState.getClientId())
+                            .flatMap(consent -> {
+                                if (consent != null && ScopeUtil.coversScopes(consent.getScopes(), requestState.getScope())) {
+                                    return authorizationCodeService.issueCodeAndRedirect(
+                                            requestState.getUserId(), requestState, state);
+                                }
+                                return Uni.createFrom().item(Response.seeOther(
+                                        OAuthRedirectBuilder.build("/consent", Map.of("state", state))).build());
+                            });
                 });
     }
 }

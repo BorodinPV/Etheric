@@ -1,8 +1,9 @@
 package com.etheric.util;
 
+import com.etheric.service.TokenPolicyService;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.core.HttpHeaders;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * Builds and parses session cookies for browser-based OAuth flows.
@@ -10,10 +11,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 public class SessionCookieFactory {
 
-    public static final String COOKIE_NAME = "SESSIONID";
-
-    @ConfigProperty(name = "etheric.session.cookie.secure", defaultValue = "true")
-    boolean secure;
+    @Inject
+    TokenPolicyService tokenPolicyService;
 
     public String create(String sessionId) {
         return build(sessionId, null);
@@ -23,18 +22,23 @@ public class SessionCookieFactory {
         return build("", 0);
     }
 
+    public String cookieName() {
+        return tokenPolicyService.oauthSessionCookieName();
+    }
+
     /**
      * Reads the session id from the Cookie header, if present.
-     *
-     * @param headers incoming HTTP headers
-     * @return session id or {@code null} when the cookie is absent
      */
-    public static String extractSessionId(HttpHeaders headers) {
-        String cookie = headers.getHeaderString("Cookie");
-        if (cookie == null || !cookie.contains(COOKIE_NAME + "=")) {
+    public String extractSessionId(HttpHeaders headers) {
+        return extractSessionIdFromCookie(headers.getHeaderString("Cookie"));
+    }
+
+    public String extractSessionIdFromCookie(String cookieHeader) {
+        String name = tokenPolicyService.oauthSessionCookieName();
+        if (cookieHeader == null || !cookieHeader.contains(name + "=")) {
             return null;
         }
-        String[] parts = cookie.split(COOKIE_NAME + "=");
+        String[] parts = cookieHeader.split(name + "=");
         if (parts.length <= 1) {
             return null;
         }
@@ -43,13 +47,14 @@ public class SessionCookieFactory {
     }
 
     private String build(String value, Integer maxAge) {
+        String name = tokenPolicyService.oauthSessionCookieName();
         StringBuilder cookie = new StringBuilder();
-        cookie.append(COOKIE_NAME).append('=').append(value);
+        cookie.append(name).append('=').append(value);
         cookie.append("; Path=/; HttpOnly; SameSite=Lax");
         if (maxAge != null) {
             cookie.append("; Max-Age=").append(maxAge);
         }
-        if (secure) {
+        if (tokenPolicyService.sessionCookieSecure()) {
             cookie.append("; Secure");
         }
         return cookie.toString();

@@ -1,6 +1,7 @@
 <div class="pf-c-tabs">
     <a class="pf-c-tabs__link {#if activeTab == 'settings'}active{/if}" href="/admin/console/clients/{clientId}/settings">Settings</a>
     <a class="pf-c-tabs__link {#if activeTab == 'credentials'}active{/if}" href="/admin/console/clients/{clientId}/credentials">Credentials</a>
+    <a class="pf-c-tabs__link {#if activeTab == 'users'}active{/if}" href="/admin/console/clients/{clientId}/users">Users</a>
 </div>
 
 {#if success}
@@ -48,6 +49,27 @@
     <div class="pf-c-form__group">
         <label class="pf-c-form__label" for="client_description">Description</label>
         <input class="pf-c-form-control" type="text" id="client_description" name="client_description" value="{client.clientDescription}">
+    </div>
+
+    <h2>Token &amp; session overrides</h2>
+    <p>Leave blank to use server defaults from <a href="/admin/console/settings">Server settings</a>.</p>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="access_token_lifetime_seconds">Access token lifetime (seconds)</label>
+        <input class="pf-c-form-control" type="number" id="access_token_lifetime_seconds" name="access_token_lifetime_seconds"
+               value="{client.accessTokenLifetimeSeconds}" min="1">
+    </div>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="refresh_token_lifetime_seconds">Refresh token lifetime (seconds)</label>
+        <input class="pf-c-form-control" type="number" id="refresh_token_lifetime_seconds" name="refresh_token_lifetime_seconds"
+               value="{client.refreshTokenLifetimeSeconds}" min="1">
+    </div>
+
+    <div class="pf-c-form__group">
+        <label class="pf-c-form__label" for="session_lifetime_seconds">OAuth session lifetime (seconds)</label>
+        <input class="pf-c-form-control" type="number" id="session_lifetime_seconds" name="session_lifetime_seconds"
+               value="{client.sessionLifetimeSeconds}" min="1">
     </div>
 
     <button class="pf-c-button pf-m-primary" type="submit">Save</button>
