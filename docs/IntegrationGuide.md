@@ -255,6 +255,8 @@ token={token}
 
 Успех: `200` (даже если токен уже недействителен).
 
+> **Public clients (SPA):** `/introspect` и `/revoke` нельзя вызывать из браузера — нужен `client_secret`. В dev см. [`examples/spa-demo`](../examples/spa-demo/README.md#dev-only-introspection--revocation-proxy): Vite middleware проксирует запросы с `test-client:secret` на сервере. В production — backend/BFF.
+
 ---
 
 ## 7. Logout
@@ -326,11 +328,11 @@ curl -s -X POST http://localhost:8080/token \
   -d "client_secret=secret"
 ```
 
-### Public client + PKCE (`spa-demo`, dev seed)
+### Public client + PKCE (`test-client`, SPA demo redirect)
 
 ```bash
 # 1. Authorize с PKCE (code_challenge — BASE64URL(SHA256(code_verifier)))
-open "http://localhost:8080/authorize?response_type=code&client_id=spa-demo&redirect_uri=http://localhost:5173/callback&state=xyz&scope=openid&code_challenge=CHALLENGE&code_challenge_method=S256"
+open "http://localhost:8080/authorize?response_type=code&client_id=test-client&redirect_uri=http://localhost:5173/callback&state=xyz&scope=openid&code_challenge=CHALLENGE&code_challenge_method=S256"
 
 # 2. Token exchange (без client_secret)
 curl -s -X POST http://localhost:8080/token \
@@ -338,7 +340,7 @@ curl -s -X POST http://localhost:8080/token \
   -d "grant_type=authorization_code" \
   -d "code=AUTH_CODE_FROM_CALLBACK" \
   -d "redirect_uri=http://localhost:5173/callback" \
-  -d "client_id=spa-demo" \
+  -d "client_id=test-client" \
   -d "code_verifier=YOUR_CODE_VERIFIER"
 
 # 3. Refresh token (public client — без client_secret)
@@ -346,8 +348,10 @@ curl -s -X POST http://localhost:8080/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=refresh_token" \
   -d "refresh_token=REFRESH_TOKEN_FROM_STEP_2" \
-  -d "client_id=spa-demo"
+  -d "client_id=test-client"
 ```
+
+Introspection и revoke для public client — только server-side. См. [SPA demo README](../examples/spa-demo/README.md#dev-only-introspection--revocation-proxy) или curl ниже (confidential client).
 
 ### Общие шаги после получения access token (confidential client)
 

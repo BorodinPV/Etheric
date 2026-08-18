@@ -15,4 +15,4 @@ if (-not (Test-Path $mvn)) {
     }
 }
 
-& $mvn -Pdev quarkus:dev @args
+& $mvn -Pdev "-Dquarkus.analytics.disabled=true" quarkus:dev @args

@@ -14,24 +14,36 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 /**
  * Seeds dev/test data when PostgreSQL tables are empty (after Flyway).
+ * Dev profile also normalizes DB to exactly one client and two users (user + admin).
  */
 @ApplicationScoped
 @IfBuildProfile(anyOf = {"dev", "test"})
 public class DevSeedService {
 
     private static final Logger LOG = Logger.getLogger(DevSeedService.class);
-    private static final UUID TEST_CLIENT_ID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
-    private static final UUID SPA_CLIENT_ID = UUID.fromString("a0000000-0000-0000-0000-000000000002");
-    private static final UUID TEST_USER_ID = UUID.fromString("b0000000-0000-0000-0000-000000000001");
-    private static final UUID ADMIN_USER_ID = UUID.fromString("b0000000-0000-0000-0000-000000000002");
+
+    static final String DEV_CLIENT_ID = "test-client";
+    static final String DEV_CLIENT_SECRET = "secret";
+
+    private static final UUID DEV_CLIENT_UUID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
+    private static final UUID DEV_USER_UUID = UUID.fromString("b0000000-0000-0000-0000-000000000001");
+    private static final UUID DEV_ADMIN_UUID = UUID.fromString("b0000000-0000-0000-0000-000000000002");
+
+    private static final List<String> DEV_CLIENT_REDIRECT_URIS = List.of(
+            "http://localhost:8080/callback",
+            "http://localhost:3000/callback",
+            "http://localhost:5173/callback",
+            "http://localhost:5173/");
 
     @Inject
     ClientRepository clientRepository;
@@ -42,9 +54,18 @@ public class DevSeedService {
     @Inject
     PasswordService passwordService;
 
+    @Inject
+    @ConfigProperty(name = "quarkus.profile")
+    String quarkusProfile;
+
     void onStart(@Observes StartupEvent event) {
         try {
-            VertxContextSupport.subscribeAndAwait(() -> seedIfEmpty().chain(this::ensureAdminUser).chain(this::ensureSpaDemoClient));
+            VertxContextSupport.subscribeAndAwait(() ->
+                    seedIfEmpty()
+                            .chain(v -> normalizeDevSeedIfDev())
+                            .chain(v -> ensureDevClient())
+                            .chain(v -> ensureDevUser())
+                            .chain(v -> ensureAdminUser()));
             LOG.info("Dev seed check completed");
         } catch (Throwable error) {
             LOG.error("Dev seed failed", error);
@@ -57,48 +78,89 @@ public class DevSeedService {
             if (count > 0) {
                 return Uni.createFrom().voidItem();
             }
-            LOG.info("Seeding test-client, user, and admin into PostgreSQL");
-            Client client = new Client(
-                    TEST_CLIENT_ID,
-                    "test-client",
-                    passwordService.hashPassword("secret"),
-                    "Test Application",
-                    List.of("http://localhost:8080/callback", "http://localhost:3000/callback"),
-                    List.of("openid", "profile", "email"),
-                    List.of("authorization_code", "refresh_token"),
-                    true,
-                    OffsetDateTime.now(),
-                    "A test OAuth client application"
-            );
-            User user = new User(
-                    TEST_USER_ID,
-                    "user",
-                    passwordService.hashPassword("password"),
-                    "user@example.com",
-                    List.of("user"),
-                    true,
-                    OffsetDateTime.now()
-            );
-            User admin = new User(
-                    ADMIN_USER_ID,
-                    "admin",
-                    passwordService.hashPassword("admin"),
-                    "admin@example.com",
-                    List.of("admin", "user"),
-                    true,
-                    OffsetDateTime.now()
-            );
-            return clientRepository.persistClient(client)
-                    .flatMap(c -> userRepository.persist(user))
-                    .flatMap(u -> userRepository.persist(admin))
-                    .flatMap(u -> clientRepository.persistClient(createSpaDemoClient()))
+            LOG.info("Seeding dev client (test-client), user, and admin into PostgreSQL");
+            return clientRepository.persistClient(createDevClient())
+                    .flatMap(c -> userRepository.persist(createDevUser()))
+                    .flatMap(u -> userRepository.persist(createAdminUser()))
                     .replaceWithVoid();
         });
     }
 
-    /**
-     * Ensures dev admin exists even when DB was seeded before admin user was added to this service.
-     */
+    Uni<Void> normalizeDevSeedIfDev() {
+        if (!"dev".equals(quarkusProfile)) {
+            return Uni.createFrom().voidItem();
+        }
+        return normalizeDevSeed();
+    }
+
+    @WithTransaction
+    Uni<Void> normalizeDevSeed() {
+        return clientRepository.deleteAllExceptClientId(DEV_CLIENT_ID)
+                .flatMap(deletedClients -> {
+                    if (deletedClients > 0) {
+                        LOG.infof("Removed %d extra dev client(s); keeping '%s'", deletedClients, DEV_CLIENT_ID);
+                    }
+                    return userRepository.deleteAllExceptUsernames("user", "admin");
+                })
+                .flatMap(deletedUsers -> {
+                    if (deletedUsers > 0) {
+                        LOG.infof("Removed %d extra dev user(s); keeping 'user' and 'admin'", deletedUsers);
+                    }
+                    return Uni.createFrom().voidItem();
+                });
+    }
+
+    @WithTransaction
+    Uni<Void> ensureDevClient() {
+        return clientRepository.findByClientId(DEV_CLIENT_ID).flatMap(existing -> {
+            if (existing.isEmpty()) {
+                LOG.info("Creating dev client (test-client)");
+                return clientRepository.persistClient(createDevClient()).replaceWithVoid();
+            }
+            Client client = existing.get();
+            boolean changed = false;
+            List<String> uris = new ArrayList<>(client.redirectUris);
+            for (String uri : DEV_CLIENT_REDIRECT_URIS) {
+                if (!uris.contains(uri)) {
+                    uris.add(uri);
+                    changed = true;
+                }
+            }
+            if (!"Etheric Dev Application".equals(client.clientName)) {
+                client.clientName = "Etheric Dev Application";
+                changed = true;
+            }
+            if (!passwordService.verifyPassword(DEV_CLIENT_SECRET, client.clientSecretHash)) {
+                LOG.info("Resetting dev client secret to default (test-client/secret)");
+                client.clientSecretHash = passwordService.hashPassword(DEV_CLIENT_SECRET);
+                changed = true;
+            }
+            if (!changed) {
+                return Uni.createFrom().voidItem();
+            }
+            LOG.info("Updating dev client (test-client) redirect URIs / secret");
+            client.redirectUris = uris;
+            return clientRepository.updateClient(client);
+        });
+    }
+
+    @WithTransaction
+    Uni<Void> ensureDevUser() {
+        return userRepository.findByUsername("user").flatMap(existing -> {
+            if (existing.isPresent()) {
+                User user = existing.get();
+                if (passwordService.verifyPassword("password", user.passwordHash)) {
+                    return Uni.createFrom().voidItem();
+                }
+                LOG.info("Resetting dev user password to default (user/password)");
+                user.passwordHash = passwordService.hashPassword("password");
+                return userRepository.updateUser(user);
+            }
+            LOG.info("Creating dev user (user/password)");
+            return userRepository.persist(createDevUser()).replaceWithVoid();
+        });
+    }
+
     @WithTransaction
     Uni<Void> ensureAdminUser() {
         return userRepository.findByUsername("admin").flatMap(existing -> {
@@ -120,45 +182,46 @@ public class DevSeedService {
                 return userRepository.updateUser(user);
             }
             LOG.info("Creating dev admin user (admin/admin)");
-            User admin = new User(
-                    UUID.randomUUID(),
-                    "admin",
-                    passwordService.hashPassword("admin"),
-                    "admin@example.com",
-                    List.of("admin", "user"),
-                    true,
-                    OffsetDateTime.now()
-            );
-            return userRepository.persist(admin).replaceWithVoid();
+            return userRepository.persist(createAdminUser()).replaceWithVoid();
         });
     }
 
-    /**
-     * Ensures SPA demo client exists even when DB was seeded before it was added.
-     */
-    @WithTransaction
-    Uni<Void> ensureSpaDemoClient() {
-        return clientRepository.findByClientId("spa-demo").flatMap(existing -> {
-            if (existing.isPresent()) {
-                return Uni.createFrom().voidItem();
-            }
-            LOG.info("Creating dev SPA demo client (spa-demo)");
-            return clientRepository.persistClient(createSpaDemoClient()).replaceWithVoid();
-        });
-    }
-
-    private Client createSpaDemoClient() {
+    private Client createDevClient() {
         return new Client(
-                SPA_CLIENT_ID,
-                "spa-demo",
-                passwordService.hashPassword(UUID.randomUUID().toString()),
-                "SPA Demo Application",
-                List.of("http://localhost:5173/callback"),
+                DEV_CLIENT_UUID,
+                DEV_CLIENT_ID,
+                passwordService.hashPassword(DEV_CLIENT_SECRET),
+                "Etheric Dev Application",
+                new ArrayList<>(DEV_CLIENT_REDIRECT_URIS),
                 List.of("openid", "profile", "email"),
                 List.of("authorization_code", "refresh_token"),
                 true,
                 OffsetDateTime.now(),
-                "Demo single-page application using Authorization Code + PKCE"
+                "Dev OAuth client (confidential + PKCE for SPA demo)"
+        );
+    }
+
+    private User createDevUser() {
+        return new User(
+                DEV_USER_UUID,
+                "user",
+                passwordService.hashPassword("password"),
+                "user@example.com",
+                List.of("user"),
+                true,
+                OffsetDateTime.now()
+        );
+    }
+
+    private User createAdminUser() {
+        return new User(
+                DEV_ADMIN_UUID,
+                "admin",
+                passwordService.hashPassword("admin"),
+                "admin@example.com",
+                List.of("admin", "user"),
+                true,
+                OffsetDateTime.now()
         );
     }
 }

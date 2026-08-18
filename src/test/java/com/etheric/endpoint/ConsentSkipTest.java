@@ -79,7 +79,7 @@ class ConsentSkipTest {
     }
 
     @Test
-    void login_withExistingConsent_redirectsToAuthorize() {
+    void login_withExistingConsent_issuesAuthorizationCode() {
         String sessionId = UUID.randomUUID().toString();
         String csrfToken = UUID.randomUUID().toString();
         awaitVoid(cacheService.saveSession(sessionId,
@@ -104,6 +104,10 @@ class ConsentSkipTest {
             .post("/login")
         .then()
             .statusCode(303)
-            .header("Location", containsString("/authorize?state=" + state));
+            .header("Location", allOf(
+                containsString(REDIRECT_URI),
+                containsString("code="),
+                containsString("state=" + state)
+            ));
     }
 }

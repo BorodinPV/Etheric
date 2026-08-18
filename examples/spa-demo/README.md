@@ -4,7 +4,7 @@ Minimal React + Vite single-page application demonstrating **Authorization Code 
 
 ## Prerequisites
 
-- Etheric running at `http://localhost:8080` (dev profile seeds client `spa-demo`)
+- Etheric running at `http://localhost:8080` (dev profile seeds client `test-client`)
 - Node.js 18+
 
 ## Run
@@ -37,8 +37,9 @@ Open [http://localhost:5173](http://localhost:5173).
 | Setting | Value |
 |---------|-------|
 | Auth server | `http://localhost:8080` |
-| `client_id` | `spa-demo` |
+| `client_id` | `test-client` |
 | `redirect_uri` | `http://localhost:5173/callback` |
+| Post-logout redirect | `http://localhost:5173/` |
 | Scopes | `openid`, `profile`, `email` |
 | Grant types | `authorization_code`, `refresh_token` |
 | Secret | Random hash in DB — **not used in browser** (PKCE public client) |
@@ -59,9 +60,22 @@ In production, set `ETHERIC_CORS_ENABLED=true` and `ETHERIC_CORS_ORIGINS` to you
 
 1. **Login** — redirects to Etheric `/authorize` with PKCE challenge.
 2. **Callback** — validates `state`, exchanges `code` + `code_verifier` at `/token` (no secret).
-3. **Dashboard** — shows decoded `id_token` claims; **Refresh token** rotates tokens (no `client_secret`); **Logout** clears session storage and redirects to Etheric `/logout?redirect_uri=http://localhost:5173/callback`.
+3. **Dashboard** — shows decoded `id_token` claims; auto-introspects the access token via a dev-only Vite proxy; **Refresh token**; **Logout** revokes tokens, clears `sessionStorage`, redirects to Etheric `/logout?redirect_uri=http://localhost:5173/` (home page, not `/callback`).
 
 Tokens are stored in `sessionStorage` only.
+
+### Dev-only introspection / revocation proxy
+
+The public SPA cannot call `/introspect` or `/revoke` directly (both require `client_secret`). During `npm run dev`, Vite middleware exposes:
+
+| Route | Forwards to | Auth |
+|-------|-------------|------|
+| `POST /api/demo/introspect` | `POST http://localhost:8080/introspect` | Basic `test-client:secret` |
+| `POST /api/demo/revoke` | `POST http://localhost:8080/revoke` | Basic `test-client:secret` |
+
+Request body (JSON): `{ "token": "...", "token_type_hint": "access_token" }` (hint optional).
+
+The secret lives only in `vite.config.js` (Node dev server) — never in browser bundles. Production builds have no proxy; use a backend for introspection/revocation in real deployments.
 
 ## Build
 
@@ -69,3 +83,5 @@ Tokens are stored in `sessionStorage` only.
 npm run build
 npm run preview
 ```
+
+> Dev proxy (`/api/demo/*`) работает **только** при `npm run dev`. В `preview` и production-сборке introspection/revoke из SPA недоступны — нужен backend/BFF.

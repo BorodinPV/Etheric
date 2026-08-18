@@ -54,7 +54,7 @@ docker compose up -d
 
 Сервер: `http://localhost:8080`
 
-При первом старте Flyway создаёт схему, `DevSeedService` добавляет dev seed (клиенты `test-client`, `spa-demo`, пользователи `user`, `admin` — если таблицы пусты).
+При первом старте Flyway создаёт схему, `DevSeedService` добавляет dev seed: один клиент `test-client`, пользователи `user` и `admin` (если таблицы пусты). В профиле `%dev` при каждом старте лишние клиенты и пользователи удаляются.
 
 Тестовые учётные данные (dev seed):
 
@@ -62,8 +62,7 @@ docker compose up -d
 |-----|----------|
 | Пользователь | `user` / `password` |
 | Admin Console | `admin` / `admin` (роль `admin`) |
-| Клиент | `test-client` / `secret` |
-| SPA Demo клиент | `spa-demo` (public, PKCE — без secret в браузере) |
+| Клиент | `test-client` / `secret` (PKCE в SPA — без secret в браузере) |
 | Admin API key (dev) | `dev-admin-key` |
 
 ### SPA Demo
@@ -93,6 +92,8 @@ npm.cmd run dev
 ```
 
 Откройте [http://localhost:5173](http://localhost:5173). Вход: `user` / `password`.
+
+На Dashboard: автоматическая **introspection** access token (через dev-only Vite proxy с `test-client:secret` на сервере), **refresh**, **logout** с revoke токенов и редиректом на Etheric `/logout`.
 
 ### Admin Console
 
@@ -397,7 +398,7 @@ curl -s -X POST http://localhost:8080/token \
   -d "client_secret=secret"
 ```
 
-**Public client + PKCE** (dev client `spa-demo`):
+**Public client + PKCE** (тот же `test-client`, redirect SPA):
 
 ```bash
 curl -s -X POST http://localhost:8080/token \
@@ -405,7 +406,7 @@ curl -s -X POST http://localhost:8080/token \
   -d "grant_type=authorization_code" \
   -d "code=AUTH_CODE" \
   -d "redirect_uri=http://localhost:5173/callback" \
-  -d "client_id=spa-demo" \
+  -d "client_id=test-client" \
   -d "code_verifier=YOUR_CODE_VERIFIER"
 ```
 

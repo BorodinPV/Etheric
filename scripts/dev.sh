@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 docker compose up -d --wait
 
 if [[ -x "./mvnw" ]]; then
-  exec ./mvnw -Pdev quarkus:dev "$@"
+  exec ./mvnw -Pdev -Dquarkus.analytics.disabled=true quarkus:dev "$@"
 fi
 
-exec mvn -Pdev quarkus:dev "$@"
+exec mvn -Pdev -Dquarkus.analytics.disabled=true quarkus:dev "$@"

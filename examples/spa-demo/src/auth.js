@@ -1,4 +1,4 @@
-import { AUTH_SERVER, CLIENT_ID, REDIRECT_URI, SCOPES } from './config';
+import { AUTH_SERVER, CLIENT_ID, POST_LOGOUT_REDIRECT_URI, REDIRECT_URI, SCOPES } from './config';
 
 const STORAGE_KEYS = {
   accessToken: 'etheric_access_token',
@@ -160,8 +160,55 @@ export async function refreshAccessToken() {
   return data;
 }
 
-export function logout() {
+export async function introspectAccessToken(token) {
+  const accessToken = token ?? sessionStorage.getItem(STORAGE_KEYS.accessToken);
+  if (!accessToken) {
+    throw new Error('No access token available');
+  }
+
+  const response = await fetch('/api/demo/introspect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: accessToken, token_type_hint: 'access_token' }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error_description || data.error || 'Introspection failed');
+  }
+  return data;
+}
+
+async function revokeToken(token, tokenTypeHint) {
+  const response = await fetch('/api/demo/revoke', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, token_type_hint: tokenTypeHint }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error_description || data.error || 'Revocation failed');
+  }
+}
+
+export async function revokeTokens() {
+  const { accessToken, refreshToken } = getStoredTokens();
+  if (refreshToken) {
+    await revokeToken(refreshToken, 'refresh_token');
+  }
+  if (accessToken) {
+    await revokeToken(accessToken, 'access_token');
+  }
+}
+
+export async function logout() {
+  try {
+    await revokeTokens();
+  } catch {
+    // Best-effort revocation; continue logout
+  }
   clearTokens();
-  const params = new URLSearchParams({ redirect_uri: REDIRECT_URI });
+  const params = new URLSearchParams({ redirect_uri: POST_LOGOUT_REDIRECT_URI });
   window.location.href = `${AUTH_SERVER}/logout?${params.toString()}`;
 }

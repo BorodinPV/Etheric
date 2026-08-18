@@ -212,6 +212,7 @@
             <properties>
                 <skipDockerCompose>false</skipDockerCompose>
                 <quarkus.profile>dev</quarkus.profile>
+                <quarkus.analytics.disabled>true</quarkus.analytics.disabled>
             </properties>
             <build>
                 <plugins>
@@ -244,6 +245,7 @@
                         <configuration>
                             <systemProperties>
                                 <quarkus.profile>dev</quarkus.profile>
+                                <quarkus.analytics.disabled>true</quarkus.analytics.disabled>
                             </systemProperties>
                         </configuration>
                     </plugin>

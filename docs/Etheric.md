@@ -52,7 +52,7 @@
 - Health checks: `/health/live`, `/health/ready` (PostgreSQL, Redis)
 - CSRF на login/consent, валидация `redirect_uri`, ротация refresh-токенов
 - Dev seed, Flyway-миграции, graceful shutdown (`quarkus.shutdown.timeout`)
-- **SPA demo** — `examples/spa-demo` (React/Vite, public client + PKCE, dev client `spa-demo`)
+- **SPA demo** — `examples/spa-demo` (React/Vite, PKCE public client, introspection/revoke via dev proxy, logout с revoke)
 - HTML-шаблоны login/consent/error (Qute), маскирование секретов в логах, CORS
 - **Production env-based config** — `ETHERIC_*` переменные окружения для PostgreSQL, Redis, Admin API, JWT issuer, CORS
 - **Production startup validation** — `ProductionConfigValidator` (профиль `prod`): блокирует дефолтный admin key и небезопасный CORS

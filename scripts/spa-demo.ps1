@@ -1,6 +1,6 @@
 # Run SPA demo (uses npm.cmd to avoid PowerShell execution policy issues).
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot\..\examples\spa-demo
+Set-Location (Join-Path $PSScriptRoot "..\examples\spa-demo")
 
 $npm = Join-Path $env:ProgramFiles "nodejs\npm.cmd"
 if (-not (Test-Path $npm)) {
@@ -20,7 +20,7 @@ if (-not (Test-Path "node_modules")) {
 
 $esbuildBin = Join-Path $PWD "node_modules\@esbuild\win32-x64\esbuild.exe"
 if (-not (Test-Path $esbuildBin)) {
-    Write-Host "esbuild binary missing — approving install scripts and reinstalling..."
+    Write-Host "esbuild binary missing - approving install scripts and reinstalling..."
     & $npm approve-scripts --allow-scripts-pending 2>$null
     & $npm install
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

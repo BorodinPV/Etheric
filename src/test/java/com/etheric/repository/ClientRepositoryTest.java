@@ -20,7 +20,7 @@ class ClientRepositoryTest {
         var client = await(() -> clientRepository.findByClientId("test-client"));
         assertTrue(client.isPresent());
         assertEquals("test-client", client.get().clientId);
-        assertEquals("Test Application", client.get().clientName);
+        assertEquals("Etheric Dev Application", client.get().clientName);
     }
 
     @Test
@@ -31,9 +31,11 @@ class ClientRepositoryTest {
     @Test
     void getRedirectUris_existingClient() {
         List<String> uris = await(() -> clientRepository.getRedirectUris("test-client"));
-        assertEquals(2, uris.size());
+        assertEquals(4, uris.size());
         assertTrue(uris.contains("http://localhost:8080/callback"));
         assertTrue(uris.contains("http://localhost:3000/callback"));
+        assertTrue(uris.contains("http://localhost:5173/callback"));
+        assertTrue(uris.contains("http://localhost:5173/"));
     }
 
     @Test

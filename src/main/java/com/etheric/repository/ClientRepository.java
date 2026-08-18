@@ -87,4 +87,10 @@ public class ClientRepository implements PanacheRepository<Client> {
     public Uni<List<Client>> findAllClients() {
         return listAll();
     }
+
+    @WithTransaction
+    @CacheInvalidateAll(cacheName = "clients")
+    public Uni<Long> deleteAllExceptClientId(String clientId) {
+        return delete("clientId <> ?1", clientId);
+    }
 }

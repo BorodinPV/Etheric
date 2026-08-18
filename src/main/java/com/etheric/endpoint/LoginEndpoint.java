@@ -3,6 +3,7 @@ package com.etheric.endpoint;
 import com.etheric.config.EthericTtlConfig;
 import com.etheric.model.SessionData;
 import com.etheric.repository.UserRepository;
+import com.etheric.service.AuthorizationCodeService;
 import com.etheric.service.CacheService;
 import com.etheric.util.OAuthRedirectBuilder;
 import com.etheric.util.ScopeUtil;
@@ -32,6 +33,9 @@ public class LoginEndpoint {
 
     @Inject
     CacheService cacheService;
+
+    @Inject
+    AuthorizationCodeService authorizationCodeService;
 
     @Inject
     SessionCookieFactory sessionCookieFactory;
@@ -125,11 +129,14 @@ public class LoginEndpoint {
             if (requestState == null) {
                 return Uni.createFrom().item(buildLoginRedirect(newSessionId, state, "/consent"));
             }
-            return cacheService.getConsent(userId, requestState.getClientId()).map(consent -> {
-                String target = (consent != null && ScopeUtil.coversScopes(consent.getScopes(), requestState.getScope()))
-                        ? "/authorize"
-                        : "/consent";
-                return buildLoginRedirect(newSessionId, state, target);
+            return cacheService.getConsent(userId, requestState.getClientId()).flatMap(consent -> {
+                if (consent != null && ScopeUtil.coversScopes(consent.getScopes(), requestState.getScope())) {
+                    return authorizationCodeService.issueCodeAndRedirect(userId, requestState, state)
+                            .map(response -> Response.seeOther(response.getLocation())
+                                    .header("Set-Cookie", sessionCookieFactory.create(newSessionId))
+                                    .build());
+                }
+                return Uni.createFrom().item(buildLoginRedirect(newSessionId, state, "/consent"));
             });
         });
     }

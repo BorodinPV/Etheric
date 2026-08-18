@@ -64,4 +64,9 @@ public class UserRepository implements PanacheRepository<User> {
                 .flatMap(session -> session.merge(user))
                 .replaceWithVoid();
     }
+
+    @WithTransaction
+    public Uni<Long> deleteAllExceptUsernames(String username1, String username2) {
+        return delete("username <> ?1 and username <> ?2", username1, username2);
+    }
 }
