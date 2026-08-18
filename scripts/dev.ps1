@@ -1,4 +1,13 @@
 # Start local PostgreSQL + Redis, then run Quarkus in dev mode.
+#
+# Usage:
+#   .\scripts\dev.ps1
+#   .\scripts\dev.ps1 -DisableRateLimit
+#   .\scripts\dev.ps1 "-Detheric.rate-limit.enabled=false"
+param(
+    [switch]$DisableRateLimit
+)
+
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot\..
 
@@ -15,4 +24,9 @@ if (-not (Test-Path $mvn)) {
     }
 }
 
-& $mvn -Pdev "-Dquarkus.analytics.disabled=true" quarkus:dev @args
+$mvnArgs = @("-Pdev", "-Dquarkus.analytics.disabled=true")
+if ($DisableRateLimit) {
+    $mvnArgs += "-Detheric.rate-limit.enabled=false"
+}
+
+& $mvn @mvnArgs quarkus:dev @args

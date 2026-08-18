@@ -369,17 +369,99 @@ curl -s -X POST http://localhost:8080/revoke \
 
 ---
 
-## 11. Rate limiting
+## 11. Нагрузочное тестирование (k6)
+
+Скрипт в [`scripts/loadtest/`](../scripts/loadtest/) — smoke/benchmark для dev. Требуется **Docker** (образ `grafana/k6`).
+
+### 11.1. Подготовка
+
+```powershell
+# Терминал 1 — сервер (rate limit лучше отключить для честных цифр)
+.\scripts\dev.ps1 -DisableRateLimit
+```
+
+```powershell
+# Терминал 2 — проверка доступности
+curl http://localhost:8080/health/live
+```
+
+Linux/macOS: `./scripts/dev.sh --no-rate-limit`
+
+### 11.2. Запуск
+
+```powershell
+# Смешанный сценарий (refresh + introspect + authorize + jwks)
+.\scripts\loadtest\run.ps1
+
+# Только refresh — основной показатель /token
+.\scripts\loadtest\run.ps1 -Scenario refresh -Vus 20 -Duration 1m
+
+# Лёгкий baseline без OAuth
+.\scripts\loadtest\run.ps1 -Scenario public -Vus 30 -Duration 30s
+```
+
+Linux/macOS: `./scripts/loadtest/run.sh` (env: `VUS`, `DURATION`, `SCENARIO`, `BASE_URL`).
+
+k6 без Docker (с хоста, если Etheric на localhost):
+
+```bash
+k6 run scripts/loadtest/etheric.k6.js -e BASE_URL=http://localhost:8080
+```
+
+### 11.3. Сценарии
+
+| `SCENARIO` | Эндпоинты | Назначение |
+|------------|-----------|------------|
+| `all` | refresh, introspect, authorize, jwks, health | Stress-mix |
+| `refresh` | `POST /token` (grant_type=refresh_token) | Token endpoint + rotation |
+| `introspect` | `POST /introspect` | RFC 7662 |
+| `authorize` | `GET /authorize` | Старт OAuth (Redis state) |
+| `public` | `GET /.well-known/jwks.json`, `GET /health/live` | Baseline без OAuth |
+
+Перед тестами скрипт проходит полный OAuth flow (dev seed: `test-client` / `secret`, `user` / `password`) и выдаёт **отдельные** refresh-токены каждому VU.
+
+### 11.4. Переменные окружения
+
+| Переменная | По умолчанию | Описание |
+|------------|--------------|----------|
+| `BASE_URL` | `http://host.docker.internal:8080` | URL сервера из Docker |
+| `VUS` | `10` | Виртуальные пользователи |
+| `DURATION` | `30s` | Длительность |
+| `SCENARIO` | `all` | См. таблицу выше |
+| `CLIENT_ID`, `CLIENT_SECRET` | `test-client`, `secret` | Dev OAuth client |
+
+### 11.5. Интерпретация результатов
+
+Пример хорошего dev-прогона (`SCENARIO=all`, VUs=10, 30s):
+
+| Метрика | Типичное значение |
+|---------|-------------------|
+| `failed` | < 5% |
+| `429 hits` | 0 (при `-DisableRateLimit`) |
+| `token_refresh` failed | < 5% |
+| `p95` | 0.5–2 s в `quarkus:dev`, 2–4 s под refresh-only на 20 VU |
+
+**Важно:**
+
+- С включённым rate limit (`etheric.rate-limit.enabled=true`) `/token` и `/authorize` быстро получают **429** — это ожидаемо, не показатель производительности.
+- `quarkus:dev` даёт **завышенный p95**; для prod-like цифр используйте packaged JAR (`-Pprod`).
+- `SCENARIO=all` — stress-mix; для сравнимых метрик refresh используйте `-Scenario refresh`.
+- Exit code k6 ≠ 0 может означать превышение порога **latency** (`p95 > 3s`), а не падение сервера.
+
+---
+
+## 12. Rate limiting
 
 На `/authorize`, `/login`, `/token`, POST `/consent` действует rate limiting (Redis).  
 При превышении лимита: `429` с `error=temporarily_unavailable`.
 
 ---
 
-## 12. Связанные документы
+## 13. Связанные документы
 
 | Документ | Содержание |
 |----------|------------|
 | [README.md](../README.md) | Запуск, конфигурация, Admin API, production |
 | [Etheric.md](Etheric.md) | Архитектура, статус реализации |
+| [scripts/loadtest/](../scripts/loadtest/) | k6 load test |
 | [.env.example](../.env.example) | Переменные окружения для deployment |
