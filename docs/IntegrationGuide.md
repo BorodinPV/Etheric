@@ -111,16 +111,29 @@ POST /token
 Content-Type: application/x-www-form-urlencoded
 ```
 
+**Confidential client** (server-side, без PKCE на `/authorize`):
+
 ```
 grant_type=authorization_code
 &code={authorization_code}
 &redirect_uri={same_as_authorize}
 &client_id={client_id}
 &client_secret={client_secret}
+```
+
+**Public client** (SPA, mobile — PKCE обязателен; `client_secret` **не передаётся**):
+
+```
+grant_type=authorization_code
+&code={authorization_code}
+&redirect_uri={same_as_authorize}
+&client_id={client_id}
 &code_verifier={pkce_verifier}
 ```
 
-**Аутентификация клиента** — form-параметры **или** Basic Auth:
+> Etheric определяет режим по auth code: если при `/authorize` был передан `code_challenge`, секрет **не требуется** (как public client в Keycloak). Без PKCE — `client_secret` **обязателен**.
+
+**Аутентификация confidential client** — form-параметры **или** Basic Auth:
 
 ```http
 Authorization: Basic base64(client_id:client_secret)
@@ -163,8 +176,9 @@ Content-Type: application/x-www-form-urlencoded
 grant_type=refresh_token
 &refresh_token={refresh_token}
 &client_id={client_id}
-&client_secret={client_secret}
 ```
+
+`client_secret` **не обязателен** (если передан — проверяется). Public clients (SPA) обновляют токены только с `client_id`, как в Keycloak.
 
 Старый refresh-токен **отзывается** при выдаче нового (rotation).  
 При scope `openid` в ответе также возвращается новый `id_token`.
@@ -296,11 +310,13 @@ GET /logout?redirect_uri={optional}
 
 ## 10. Пример полного потока (curl)
 
+### Confidential client (`test-client`)
+
 ```bash
 # 1. Authorize (откройте в браузере после login/consent)
 open "http://localhost:8080/authorize?response_type=code&client_id=test-client&redirect_uri=http://localhost:8080/callback&state=xyz&scope=openid"
 
-# 2. Token exchange
+# 2. Token exchange (client_secret обязателен — PKCE не использовался)
 curl -s -X POST http://localhost:8080/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=authorization_code" \
@@ -308,13 +324,40 @@ curl -s -X POST http://localhost:8080/token \
   -d "redirect_uri=http://localhost:8080/callback" \
   -d "client_id=test-client" \
   -d "client_secret=secret"
+```
 
-# 3. Introspect
+### Public client + PKCE (`spa-demo`, dev seed)
+
+```bash
+# 1. Authorize с PKCE (code_challenge — BASE64URL(SHA256(code_verifier)))
+open "http://localhost:8080/authorize?response_type=code&client_id=spa-demo&redirect_uri=http://localhost:5173/callback&state=xyz&scope=openid&code_challenge=CHALLENGE&code_challenge_method=S256"
+
+# 2. Token exchange (без client_secret)
+curl -s -X POST http://localhost:8080/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code" \
+  -d "code=AUTH_CODE_FROM_CALLBACK" \
+  -d "redirect_uri=http://localhost:5173/callback" \
+  -d "client_id=spa-demo" \
+  -d "code_verifier=YOUR_CODE_VERIFIER"
+
+# 3. Refresh token (public client — без client_secret)
+curl -s -X POST http://localhost:8080/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=refresh_token" \
+  -d "refresh_token=REFRESH_TOKEN_FROM_STEP_2" \
+  -d "client_id=spa-demo"
+```
+
+### Общие шаги после получения access token (confidential client)
+
+```bash
+# 3. Introspect (требует client_secret — server-side only)
 curl -s -X POST http://localhost:8080/introspect \
   -u "test-client:secret" \
   -d "token=ACCESS_TOKEN"
 
-# 4. Revoke refresh token
+# 4. Revoke refresh token (требует client_secret — server-side only)
 curl -s -X POST http://localhost:8080/revoke \
   -u "test-client:secret" \
   -d "token=REFRESH_TOKEN"

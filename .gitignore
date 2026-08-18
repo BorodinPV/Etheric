@@ -1,5 +1,6 @@
 .env
 target/
+node_modules/
 *.class
 *.jar
 *.war

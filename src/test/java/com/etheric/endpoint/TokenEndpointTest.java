@@ -2,18 +2,23 @@ package com.etheric.endpoint;
 
 import com.etheric.model.AccessTokenData;
 import com.etheric.model.AuthorizationCodeData;
+import com.etheric.model.ConsentData;
 import com.etheric.model.RefreshTokenData;
+import com.etheric.model.SessionData;
 import com.etheric.service.CacheService;
 import com.etheric.service.JwtService;
 import com.etheric.util.PkceUtil;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import io.restassured.http.Cookie;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
+import java.util.UUID;
 
 import static com.etheric.testsupport.TestSupport.await;
 import static com.etheric.testsupport.TestSupport.awaitVoid;
@@ -487,7 +492,110 @@ class TokenEndpointTest {
             .body("error", equalTo("invalid_client"));
     }
 
+    private static final String REDIRECT_URI = "http://localhost:8080/callback";
     private static final String PKCE_VERIFIER = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG";
+
+    @Test
+    void token_authCode_pkceWithoutSecret_succeeds() {
+        String sessionId = UUID.randomUUID().toString();
+        awaitVoid(cacheService.saveSession(sessionId, new SessionData(TEST_USER_ID, null, System.currentTimeMillis()), 1800));
+        awaitVoid(cacheService.saveConsent(TEST_USER_ID, "test-client",
+                new ConsentData(List.of("openid", "profile", "email"), System.currentTimeMillis()), 86400));
+
+        String state = UUID.randomUUID().toString();
+        String challenge = PkceUtil.s256Challenge(PKCE_VERIFIER);
+
+        String location = given()
+            .queryParam("response_type", "code")
+            .queryParam("client_id", "test-client")
+            .queryParam("redirect_uri", REDIRECT_URI)
+            .queryParam("state", state)
+            .queryParam("scope", "openid")
+            .queryParam("scope", "profile")
+            .queryParam("code_challenge", challenge)
+            .queryParam("code_challenge_method", "S256")
+            .cookie(new Cookie.Builder("SESSIONID", sessionId).build())
+            .redirects().follow(false)
+        .when()
+            .get("/authorize")
+        .then()
+            .statusCode(303)
+            .extract().header("Location");
+
+        String code = extractQueryParam(location, "code");
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "authorization_code")
+            .formParam("code", code)
+            .formParam("redirect_uri", REDIRECT_URI)
+            .formParam("client_id", "test-client")
+            .formParam("code_verifier", PKCE_VERIFIER)
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(200)
+            .body("access_token", notNullValue())
+            .body("token_type", equalTo("Bearer"))
+            .body("refresh_token", notNullValue())
+            .body("id_token", notNullValue());
+    }
+
+    @Test
+    void token_authCode_noPkceWithoutSecret_returnsInvalidClient() {
+        String sessionId = UUID.randomUUID().toString();
+        awaitVoid(cacheService.saveSession(sessionId, new SessionData(TEST_USER_ID, null, System.currentTimeMillis()), 1800));
+        awaitVoid(cacheService.saveConsent(TEST_USER_ID, "test-client",
+                new ConsentData(List.of("openid", "profile", "email"), System.currentTimeMillis()), 86400));
+
+        String state = UUID.randomUUID().toString();
+
+        String location = given()
+            .queryParam("response_type", "code")
+            .queryParam("client_id", "test-client")
+            .queryParam("redirect_uri", REDIRECT_URI)
+            .queryParam("state", state)
+            .queryParam("scope", "openid")
+            .cookie(new Cookie.Builder("SESSIONID", sessionId).build())
+            .redirects().follow(false)
+        .when()
+            .get("/authorize")
+        .then()
+            .statusCode(303)
+            .extract().header("Location");
+
+        String code = extractQueryParam(location, "code");
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "authorization_code")
+            .formParam("code", code)
+            .formParam("redirect_uri", REDIRECT_URI)
+            .formParam("client_id", "test-client")
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(401)
+            .body("error", equalTo("invalid_client"));
+    }
+
+    private static String extractQueryParam(String location, String name) {
+        try {
+            String query = URI.create(location).getRawQuery();
+            if (query == null) {
+                throw new IllegalArgumentException("No query in redirect: " + location);
+            }
+            for (String part : query.split("&")) {
+                int eq = part.indexOf('=');
+                if (eq > 0 && part.substring(0, eq).equals(name)) {
+                    return java.net.URLDecoder.decode(part.substring(eq + 1), StandardCharsets.UTF_8);
+                }
+            }
+            throw new IllegalArgumentException("Missing " + name + " in redirect: " + location);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     @Test
     void token_authCode_withPkce_validVerifier_returnsTokens() {

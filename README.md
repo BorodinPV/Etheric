@@ -54,7 +54,7 @@ docker compose up -d
 
 Сервер: `http://localhost:8080`
 
-При первом старте Flyway создаёт схему, `DevSeedService` добавляет тестового клиента и пользователя (если таблицы пусты).
+При первом старте Flyway создаёт схему, `DevSeedService` добавляет dev seed (клиенты `test-client`, `spa-demo`, пользователи `user`, `admin` — если таблицы пусты).
 
 Тестовые учётные данные (dev seed):
 
@@ -63,7 +63,36 @@ docker compose up -d
 | Пользователь | `user` / `password` |
 | Admin Console | `admin` / `admin` (роль `admin`) |
 | Клиент | `test-client` / `secret` |
+| SPA Demo клиент | `spa-demo` (public, PKCE — без secret в браузере) |
 | Admin API key (dev) | `dev-admin-key` |
+
+### SPA Demo
+
+Пример public-клиента (Authorization Code + PKCE) на React/Vite: [examples/spa-demo](examples/spa-demo).
+
+**Два терминала:**
+
+```powershell
+# Terminal 1 — Etheric
+.\scripts\dev.ps1
+```
+
+```powershell
+# Terminal 2 — SPA demo
+.\scripts\spa-demo.ps1
+```
+
+Или вручную (используйте `npm.cmd`, если PowerShell блокирует `npm`):
+
+```powershell
+cd examples/spa-demo
+npm.cmd install
+npm.cmd approve-scripts --allow-scripts-pending   # если npm предупреждает про esbuild
+npm.cmd install
+npm.cmd run dev
+```
+
+Откройте [http://localhost:5173](http://localhost:5173). Вход: `user` / `password`.
 
 ### Admin Console
 
@@ -351,10 +380,12 @@ HTML. POST: `action=approve|deny`, `state`, `csrf_token`.
 | `code` | да |
 | `redirect_uri` | да (должен совпасть с сохранённым) |
 | `client_id` | да |
-| `client_secret` | да |
+| `client_secret` | да*, если на `/authorize` **не** был `code_challenge` |
 | `code_verifier` | да*, если на `/authorize` был `code_challenge` |
 
-\* Без PKCE на authorize — `code_verifier` не требуется.
+\* Режим как в Keycloak: PKCE на authorize → public client, секрет не нужен; без PKCE → confidential client, секрет обязателен.
+
+**Confidential client** (без PKCE):
 
 ```bash
 curl -s -X POST http://localhost:8080/token \
@@ -363,11 +394,22 @@ curl -s -X POST http://localhost:8080/token \
   -d "code=AUTH_CODE" \
   -d "redirect_uri=http://localhost:8080/callback" \
   -d "client_id=test-client" \
-  -d "client_secret=secret" \
+  -d "client_secret=secret"
+```
+
+**Public client + PKCE** (dev client `spa-demo`):
+
+```bash
+curl -s -X POST http://localhost:8080/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code" \
+  -d "code=AUTH_CODE" \
+  -d "redirect_uri=http://localhost:5173/callback" \
+  -d "client_id=spa-demo" \
   -d "code_verifier=YOUR_CODE_VERIFIER"
 ```
 
-При неверном `client_id` или `client_secret` → `401` с `error=invalid_client`.  
+При неверном `client_id` или `client_secret` (когда секрет требуется) → `401` с `error=invalid_client`.  
 Если `client_id` не совпадает с клиентом, выдавшим auth code → `400` с `error=invalid_grant`.  
 При неверном или отсутствующем `code_verifier` (если был PKCE) → `400 invalid_grant`.
 
@@ -498,11 +540,12 @@ JSON на Token Endpoint / admin:
 ## Безопасность (рекомендации)
 
 1. Всегда передавайте и проверяйте **`state`**.
-2. На **`/token`** (grant `authorization_code`) **`client_secret` обязателен** и проверяется; неверные credentials → `401 invalid_client`.
-3. Храните **`client_secret`** только на сервере клиента; не логируйте его.
-4. В production используйте **HTTPS**; cookie сессии с `Secure` (`etheric.session.cookie.secure=true`).
-5. Смените **`etheric.admin.api-key`** — не оставляйте значение по умолчанию.
-6. Не коммитьте секреты; `client_secret` из Admin API показывается один раз.
+2. **Public clients (SPA, mobile)** — используйте **PKCE**; на **`/token`** `client_secret` **не передаётся** (если на `/authorize` был `code_challenge`).
+3. **Confidential clients** — на **`/token`** `client_secret` **обязателен** (если PKCE не использовался); неверные credentials → `401 invalid_client`.
+4. Храните **`client_secret`** только на server-side; не логируйте и не встраивайте в frontend bundle.
+5. В production используйте **HTTPS**; cookie сессии с `Secure` (`etheric.session.cookie.secure=true`).
+6. Смените **`etheric.admin.api-key`** — не оставляйте значение по умолчанию.
+7. Не коммитьте секреты; `client_secret` из Admin API показывается один раз.
 
 ---
 
@@ -549,7 +592,7 @@ export ETHERIC_CORS_ORIGINS=https://app.example.com
 ```
 
 **Никогда** не используйте `origins=*` вместе с `access-control-allow-credentials=true`.  
-В профиле `%dev` CORS включён с явными localhost-origins (`8080`, `127.0.0.1:8080`, `3000`).
+В профиле `%dev` CORS включён с явными localhost-origins (`8080`, `127.0.0.1:8080`, `3000`, `5173` для SPA demo).
 
 При старте с `-Dquarkus.profile=prod` `ProductionConfigValidator` проверяет конфигурацию и **завершает процесс**, если:
 

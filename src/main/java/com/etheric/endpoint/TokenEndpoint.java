@@ -90,13 +90,19 @@ public class TokenEndpoint {
         }
         String resolvedClientId = creds.clientId();
 
-        return clientAuthService.authenticateRequired(clientId, clientSecret, headers)
-                .flatMap(client -> clientRepository.isGrantTypeSupported(resolvedClientId, "authorization_code"))
-                .flatMap(supported -> {
-                    if (!supported) {
-                        return Uni.createFrom().failure(new OAuthException(OAuthError.UNAUTHORIZED_CLIENT, null, null));
-                    }
-                    return cacheService.getAuthorizationCode(code);
+        return cacheService.getAuthorizationCode(code)
+                .flatMap(codeData -> {
+                    Uni<Client> authUni = hasPkceChallenge(codeData)
+                            ? clientAuthService.authenticateOptionalSecret(clientId, clientSecret, headers)
+                            : clientAuthService.authenticateRequired(clientId, clientSecret, headers);
+                    return authUni
+                            .flatMap(client -> clientRepository.isGrantTypeSupported(resolvedClientId, "authorization_code"))
+                            .flatMap(supported -> {
+                                if (!supported) {
+                                    return Uni.createFrom().failure(new OAuthException(OAuthError.UNAUTHORIZED_CLIENT, null, null));
+                                }
+                                return Uni.createFrom().item(codeData);
+                            });
                 })
                 .flatMap(codeData -> validateAuthorizationCode(codeData, redirectUri, resolvedClientId, codeVerifier))
                 .flatMap(codeData -> {
@@ -104,6 +110,12 @@ public class TokenEndpoint {
                     return issueTokenResponse(codeData.getUserId(), resolvedClientId, grantedScopes, codeData.getNonce())
                             .flatMap(response -> authorizationCodeService.markCodeUsed(code).replaceWith(response));
                 });
+    }
+
+    private static boolean hasPkceChallenge(AuthorizationCodeData codeData) {
+        return codeData != null
+                && codeData.getCodeChallenge() != null
+                && !codeData.getCodeChallenge().isBlank();
     }
 
     private Uni<AuthorizationCodeData> validateAuthorizationCode(AuthorizationCodeData codeData,

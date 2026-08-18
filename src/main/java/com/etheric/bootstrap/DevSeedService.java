@@ -29,6 +29,7 @@ public class DevSeedService {
 
     private static final Logger LOG = Logger.getLogger(DevSeedService.class);
     private static final UUID TEST_CLIENT_ID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
+    private static final UUID SPA_CLIENT_ID = UUID.fromString("a0000000-0000-0000-0000-000000000002");
     private static final UUID TEST_USER_ID = UUID.fromString("b0000000-0000-0000-0000-000000000001");
     private static final UUID ADMIN_USER_ID = UUID.fromString("b0000000-0000-0000-0000-000000000002");
 
@@ -43,7 +44,7 @@ public class DevSeedService {
 
     void onStart(@Observes StartupEvent event) {
         try {
-            VertxContextSupport.subscribeAndAwait(() -> seedIfEmpty().chain(this::ensureAdminUser));
+            VertxContextSupport.subscribeAndAwait(() -> seedIfEmpty().chain(this::ensureAdminUser).chain(this::ensureSpaDemoClient));
             LOG.info("Dev seed check completed");
         } catch (Throwable error) {
             LOG.error("Dev seed failed", error);
@@ -90,6 +91,7 @@ public class DevSeedService {
             return clientRepository.persistClient(client)
                     .flatMap(c -> userRepository.persist(user))
                     .flatMap(u -> userRepository.persist(admin))
+                    .flatMap(u -> clientRepository.persistClient(createSpaDemoClient()))
                     .replaceWithVoid();
         });
     }
@@ -129,5 +131,34 @@ public class DevSeedService {
             );
             return userRepository.persist(admin).replaceWithVoid();
         });
+    }
+
+    /**
+     * Ensures SPA demo client exists even when DB was seeded before it was added.
+     */
+    @WithTransaction
+    Uni<Void> ensureSpaDemoClient() {
+        return clientRepository.findByClientId("spa-demo").flatMap(existing -> {
+            if (existing.isPresent()) {
+                return Uni.createFrom().voidItem();
+            }
+            LOG.info("Creating dev SPA demo client (spa-demo)");
+            return clientRepository.persistClient(createSpaDemoClient()).replaceWithVoid();
+        });
+    }
+
+    private Client createSpaDemoClient() {
+        return new Client(
+                SPA_CLIENT_ID,
+                "spa-demo",
+                passwordService.hashPassword(UUID.randomUUID().toString()),
+                "SPA Demo Application",
+                List.of("http://localhost:5173/callback"),
+                List.of("openid", "profile", "email"),
+                List.of("authorization_code", "refresh_token"),
+                true,
+                OffsetDateTime.now(),
+                "Demo single-page application using Authorization Code + PKCE"
+        );
     }
 }
