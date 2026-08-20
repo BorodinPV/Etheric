@@ -47,6 +47,14 @@ export async function createPkcePair() {
   return { verifier, challenge };
 }
 
+export function startRegistration() {
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    return_uri: window.location.origin + '/',
+  });
+  window.location.href = `${AUTH_SERVER}/register?${params.toString()}`;
+}
+
 export async function startLogin() {
   const state = randomString(32);
   const { verifier, challenge } = await createPkcePair();

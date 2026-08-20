@@ -59,8 +59,9 @@ In production, set `ETHERIC_CORS_ENABLED=true` and `ETHERIC_CORS_ORIGINS` to you
 ## Flow
 
 1. **Login** — redirects to Etheric `/authorize` with PKCE challenge.
-2. **Callback** — validates `state`, exchanges `code` + `code_verifier` at `/token` (no secret).
-3. **Dashboard** — shows decoded `id_token` claims; auto-introspects the access token via a dev-only Vite proxy; **automatically refreshes** the access token 60s before expiry (and on load if already expired); **Logout** revokes tokens, clears `sessionStorage`, redirects to Etheric `/logout?redirect_uri=http://localhost:5173/` (home page, not `/callback`). If the refresh token is expired or revoked, tokens are cleared and the user is sent back to the home page to log in again.
+2. **Create account** — opens Etheric `/register` for client `test-client`; after signup the user is returned to the SPA home page with `?registered=1` and can log in.
+3. **Callback** — validates `state`, exchanges `code` + `code_verifier` at `/token` (no secret).
+4. **Dashboard** — shows decoded `id_token` claims; auto-introspects the access token via a dev-only Vite proxy; **automatically refreshes** the access token 60s before expiry (and on load if already expired); **Logout** revokes tokens, clears `sessionStorage`, redirects to Etheric `/logout?redirect_uri=http://localhost:5173/` (home page, not `/callback`). If the refresh token is expired or revoked, tokens are cleared and the user is sent back to the home page to log in again.
 
 Tokens are stored in `sessionStorage` only.
 

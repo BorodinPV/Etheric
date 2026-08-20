@@ -66,6 +66,7 @@ public class RateLimitFilter {
         return switch (path) {
             case "authorize" -> rateLimitConfig.authorizeMax();
             case "login" -> rateLimitConfig.loginMax();
+            case "register" -> rateLimitConfig.loginMax();
             case "admin/console/login" -> "POST".equalsIgnoreCase(method) ? rateLimitConfig.loginMax() : null;
             case "token" -> rateLimitConfig.tokenMax();
             case "consent" -> "POST".equalsIgnoreCase(method) ? rateLimitConfig.consentMax() : null;

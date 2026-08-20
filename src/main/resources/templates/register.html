@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Вход — Etheric OAuth</title>
+    <title>Регистрация — Etheric OAuth</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
@@ -12,30 +12,33 @@
         p.subtitle { color: #666; margin-bottom: 24px; font-size: 14px; }
         .form-group { margin-bottom: 16px; }
         label { display: block; font-size: 14px; font-weight: 500; color: #333; margin-bottom: 6px; }
-        input[type="text"], input[type="password"] { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; transition: border-color 0.2s; }
+        input[type="text"], input[type="password"], input[type="email"] { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; transition: border-color 0.2s; }
         input:focus { outline: none; border-color: #4a90d9; box-shadow: 0 0 0 3px rgba(74,144,217,0.1); }
         button { width: 100%; padding: 10px; background: #4a90d9; color: #fff; border: none; border-radius: 6px; font-size: 16px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
         button:hover { background: #357abd; }
         .error { background: #fee; border: 1px solid #fcc; color: #c33; padding: 10px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
-        .success { background: #efe; border: 1px solid #cfc; color: #363; padding: 10px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
         .footer-link { margin-top: 16px; text-align: center; font-size: 14px; }
         .footer-link a { color: #4a90d9; text-decoration: none; }
         .footer-link a:hover { text-decoration: underline; }
+        .hint { font-size: 12px; color: #666; margin-top: 4px; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h1>Вход в систему</h1>
-        <p class="subtitle">Etheric OAuth 2.0 Authorization Server</p>
-        {#if success}
-            <div class="success">{success}</div>
-        {/if}
+        <h1>Регистрация</h1>
+        <p class="subtitle">Создайте аккаунт Etheric OAuth</p>
         {#if error}
             <div class="error">{error}</div>
         {/if}
-        <form method="post" action="/login">
+        <form method="post" action="/register">
             {#if state}
                 <input type="hidden" name="state" value="{state}">
+            {/if}
+            {#if clientId}
+                <input type="hidden" name="client_id" value="{clientId}">
+            {/if}
+            {#if returnUri}
+                <input type="hidden" name="return_uri" value="{returnUri}">
             {/if}
             <input type="hidden" name="csrf_token" value="{csrfToken}">
             <div class="form-group">
@@ -44,15 +47,20 @@
             </div>
             <div class="form-group">
                 <label for="password">Пароль</label>
-                <input type="password" id="password" name="password" required>
+                <input type="password" id="password" name="password" required minlength="8">
+                <div class="hint">Минимум 8 символов</div>
             </div>
-            <button type="submit">Войти</button>
+            <div class="form-group">
+                <label for="email">Email (необязательно)</label>
+                <input type="email" id="email" name="email">
+            </div>
+            <button type="submit">Зарегистрироваться</button>
         </form>
         <p class="footer-link">
             {#if state}
-            <a href="/register?state={state}">Создать аккаунт</a>
+            <a href="/login?state={state}">Уже есть аккаунт? Войти</a>
             {#else}
-            <a href="/register">Создать аккаунт</a>
+            <a href="/login">Уже есть аккаунт? Войти</a>
             {/if}
         </p>
     </div>

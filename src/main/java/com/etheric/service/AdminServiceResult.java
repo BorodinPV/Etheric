@@ -43,6 +43,14 @@ public final class AdminServiceResult<T> {
         return errorCode == null;
     }
 
+    public String errorCode() {
+        return errorCode;
+    }
+
+    public String errorDescription() {
+        return errorDescription;
+    }
+
     public T value() {
         return value;
     }
