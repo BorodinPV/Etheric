@@ -1,5 +1,6 @@
 package com.etheric.endpoint;
 
+import com.etheric.logging.SecurityAuditLogger;
 import com.etheric.service.TokenPolicyService;
 import com.etheric.entity.Client;
 import com.etheric.exception.OAuthError;
@@ -52,6 +53,9 @@ public class TokenEndpoint {
 
     @Inject
     TokenPolicyService tokenPolicyService;
+
+    @Inject
+    SecurityAuditLogger securityAuditLogger;
 
     @POST
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
@@ -156,19 +160,27 @@ public class TokenEndpoint {
                 })
                 .flatMap(refreshTokenData -> {
                     if (refreshTokenData == null) {
+                        securityAuditLogger.refreshTokenReuse(
+                                resolvedClientId, SecurityAuditLogger.resolveClientIp(headers));
                         return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_GRANT, null, null));
                     }
                     if (!resolvedClientId.equals(refreshTokenData.getClientId())) {
                         return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_GRANT, null, null));
                     }
                     List<String> grantedScopes = ScopeUtil.resolveGrantedScopes(scope, refreshTokenData.getScopes());
-                    return cacheService.deleteRefreshToken(refreshToken)
-                            .flatMap(v -> issueTokenResponse(refreshTokenData.getUserId(), resolvedClientId, grantedScopes, null));
+                    return issueTokenResponse(refreshTokenData.getUserId(), resolvedClientId, grantedScopes, null,
+                            refreshToken, headers);
                 });
     }
 
     private Uni<Response> issueTokenResponse(String userId, String clientId,
                                              List<String> grantedScopes, String nonce) {
+        return issueTokenResponse(userId, clientId, grantedScopes, nonce, null, null);
+    }
+
+    private Uni<Response> issueTokenResponse(String userId, String clientId,
+                                             List<String> grantedScopes, String nonce,
+                                             String oldRefreshToken, HttpHeaders headers) {
         boolean includeIdToken = grantedScopes.contains("openid");
 
         return tokenPolicyService.resolveForClient(clientId).flatMap(lifetimes -> {
@@ -183,14 +195,33 @@ public class TokenEndpoint {
                         ? resolveIdToken(userId, clientId, nonce, grantedScopes, accessTtl)
                         : Uni.createFrom().nullItem();
 
-                return idTokenUni.flatMap(idToken ->
-                        cacheService.saveAccessToken(accessToken, new AccessTokenData(
-                                        userId, clientId, grantedScopes, System.currentTimeMillis() / 1000 + accessTtl), accessTtl)
-                                .flatMap(v -> cacheService.saveRefreshToken(refreshToken,
-                                        new RefreshTokenData(userId, clientId, grantedScopes), refreshTtl))
-                                .replaceWith(Response.ok(new TokenResponse(
-                                        accessToken, "Bearer", accessTtl, refreshToken,
-                                        String.join(" ", grantedScopes), idToken)).build()));
+                return idTokenUni.flatMap(idToken -> {
+                    AccessTokenData accessData = new AccessTokenData(
+                            userId, clientId, grantedScopes, System.currentTimeMillis() / 1000 + accessTtl);
+                    RefreshTokenData refreshData = new RefreshTokenData(userId, clientId, grantedScopes);
+                    TokenResponse tokenResponse = new TokenResponse(
+                            accessToken, "Bearer", accessTtl, refreshToken,
+                            String.join(" ", grantedScopes), idToken);
+
+                    Uni<Void> persistTokens = oldRefreshToken != null
+                            ? cacheService.rotateRefreshTokenAtomically(
+                                    oldRefreshToken, accessToken, accessData, accessTtl,
+                                    refreshToken, refreshData, refreshTtl)
+                                    .flatMap(rotated -> {
+                                        if (!rotated) {
+                                            securityAuditLogger.refreshTokenReuse(
+                                                    clientId, SecurityAuditLogger.resolveClientIp(headers));
+                                            return Uni.createFrom().failure(
+                                                    new OAuthException(OAuthError.INVALID_GRANT, null, null));
+                                        }
+                                        return Uni.createFrom().voidItem();
+                                    })
+                            : cacheService.saveTokenPairAtomically(
+                                    accessToken, accessData, accessTtl,
+                                    refreshToken, refreshData, refreshTtl);
+
+                    return persistTokens.replaceWith(Response.ok(tokenResponse).build());
+                });
             });
         });
     }

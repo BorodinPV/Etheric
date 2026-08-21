@@ -5,27 +5,25 @@ const AUTH_SERVER = 'http://localhost:8080';
 const DEMO_CLIENT_ID = 'test-client';
 const DEMO_CLIENT_SECRET = 'secret';
 
-function readJsonBody(req) {
+function readRequestBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
     req.on('data', (chunk) => {
       data += chunk;
     });
-    req.on('end', () => {
-      try {
-        resolve(data ? JSON.parse(data) : {});
-      } catch (err) {
-        reject(err);
-      }
-    });
+    req.on('end', () => resolve(data));
     req.on('error', reject);
   });
 }
 
-function demoAuthProxy() {
+/**
+ * Dev BFF: forwards SPA token requests to RFC 7662 /introspect and RFC 7009 /revoke
+ * with confidential client Basic Auth (secret stays on the Node dev server, not in the browser bundle).
+ */
+function oauthBffProxy() {
   const basicAuth = Buffer.from(`${DEMO_CLIENT_ID}:${DEMO_CLIENT_SECRET}`).toString('base64');
 
-  async function forward(path, req, res) {
+  async function forward(standardPath, req, res) {
     if (req.method !== 'POST') {
       res.statusCode = 405;
       res.end('Method Not Allowed');
@@ -33,8 +31,9 @@ function demoAuthProxy() {
     }
 
     try {
-      const body = await readJsonBody(req);
-      const { token, token_type_hint: tokenTypeHint } = body;
+      const rawBody = await readRequestBody(req);
+      const params = new URLSearchParams(rawBody);
+      const token = params.get('token');
 
       if (!token) {
         res.statusCode = 400;
@@ -43,18 +42,13 @@ function demoAuthProxy() {
         return;
       }
 
-      const params = new URLSearchParams({ token });
-      if (tokenTypeHint) {
-        params.set('token_type_hint', tokenTypeHint);
-      }
-
-      const response = await fetch(`${AUTH_SERVER}${path}`, {
+      const response = await fetch(`${AUTH_SERVER}${standardPath}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           Authorization: `Basic ${basicAuth}`,
         },
-        body: params,
+        body: params.toString(),
       });
 
       const text = await response.text();
@@ -68,17 +62,24 @@ function demoAuthProxy() {
     }
   }
 
+  function mount(server) {
+    server.middlewares.use('/api/oauth/introspect', (req, res) => forward('/introspect', req, res));
+    server.middlewares.use('/api/oauth/revoke', (req, res) => forward('/revoke', req, res));
+  }
+
   return {
-    name: 'demo-auth-proxy',
+    name: 'oauth-bff-proxy',
     configureServer(server) {
-      server.middlewares.use('/api/demo/introspect', (req, res) => forward('/introspect', req, res));
-      server.middlewares.use('/api/demo/revoke', (req, res) => forward('/revoke', req, res));
+      mount(server);
+    },
+    configurePreviewServer(server) {
+      mount(server);
     },
   };
 }
 
 export default defineConfig({
-  plugins: [react(), demoAuthProxy()],
+  plugins: [react(), oauthBffProxy()],
   server: {
     port: 5173,
     strictPort: true,

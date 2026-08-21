@@ -46,7 +46,7 @@ OAuth 2.0 / OIDC **Authorization Server** на Quarkus: Authorization Code + PKC
 
 - Клиенты и пользователи (CRUD, credentials, secret regeneration)
 - **Membership** — какие пользователи могут авторизоваться через какого клиента
-- **Server settings** — cookie OAuth-сессии, TTL токенов по умолчанию; переопределения — на вкладке Settings клиента
+- **Настройки клиента** — OAuth cookie, TTL токенов и сессии (у каждого клиента свои)
 - **Язык:** English / Русский (cookie `ADMIN_LOCALE`)
 
 JSON Admin API (`/admin/clients`, `/admin/users`) — заголовок `X-Admin-Api-Key` (в dev: `dev-admin-key`). Подробности — [IntegrationGuide §2](docs/IntegrationGuide.md).
@@ -82,11 +82,23 @@ React/Vite public client (PKCE): [examples/spa-demo](examples/spa-demo).
 
 | PostgreSQL | Redis |
 |------------|-------|
-| Клиенты, пользователи, membership, server settings, backup auth codes | Сессии, коды, токены, request state, consent, admin sessions |
+| Клиенты, пользователи, membership, **consent** (`user_consents`), backup auth codes | Сессии, коды, токены, request state, consent cache, admin sessions |
 
-TTL токенов и имя OAuth cookie — в **`server_settings`** (Admin Console → Server settings), с fallback на `etheric.jwt.*` / `etheric.session.*` в `application.properties`. Per-client overrides — в настройках клиента.
+TTL токенов и имя OAuth cookie хранятся **у каждого клиента** (Admin Console → Settings клиента). При создании клиента подставляются значения из `etheric.jwt.*` / `etheric.session.*` в `application.properties`.
 
-Прочее: PKCE (S256/plain), OIDC `id_token`, refresh rotation, remember consent, rate limit на `/authorize`/`/login`/`/token`/`/consent`, RS256 JWT + JWKS.
+Прочее: PKCE (**S256 only** — plain rejected), OIDC `id_token`, refresh rotation, remember consent, rate limit на `/authorize`/`/login`/`/token`/`/consent`, RS256 JWT + JWKS.
+
+---
+
+## Security & production
+
+| Topic | Notes |
+|-------|-------|
+| **Consent** | Persisted in **PostgreSQL** (`user_consents`); Redis is a TTL cache only |
+| **Token storage** | Access/refresh tokens, codes, sessions in **Redis** — use persistent Redis in prod |
+| **Rate limits** | `/authorize`, `/login`, `/token`, `/consent` (POST) — see `etheric.rate-limit.*` |
+| **PKCE** | **S256 only**; `plain` is rejected at authorize and token |
+| **Public clients** | No `client_secret` in the browser; use PKCE + backend BFF for introspection/revocation (see [spa-demo](examples/spa-demo)) |
 
 ---
 

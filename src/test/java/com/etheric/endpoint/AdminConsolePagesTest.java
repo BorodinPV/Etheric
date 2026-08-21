@@ -84,7 +84,10 @@ class AdminConsolePagesTest {
 
         given().cookie("ADMIN_SESSION", cookie)
                 .get("/admin/console/clients/test-client/settings").then()
-                .statusCode(200).body(containsString("Settings"));
+                .statusCode(200)
+                .body(containsString("Settings"))
+                .body(containsString("Token &amp; session settings"))
+                .body(containsString("SESSIONID"));
 
         given().cookie("ADMIN_SESSION", cookie)
                 .get("/admin/console/clients/test-client/credentials").then()
@@ -93,9 +96,6 @@ class AdminConsolePagesTest {
         given().cookie("ADMIN_SESSION", cookie)
                 .get("/admin/console/clients/test-client/users").then()
                 .statusCode(200).body(containsString("Users"));
-
-        given().cookie("ADMIN_SESSION", cookie).get("/admin/console/settings").then()
-                .statusCode(200).body(containsString("Server settings"));
 
         given().cookie("ADMIN_SESSION", cookie).get("/admin/console/users").then()
                 .statusCode(200).body(containsString("Users"));

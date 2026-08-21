@@ -1,12 +1,35 @@
 <div class="pf-c-toolbar">
-    <form class="pf-c-search" method="get" action="/admin/console/users">
-        <input class="pf-c-form-control" type="search" name="search" value="{search}" placeholder="{i18n.get('common.searchUsers')}">
+    <form class="pf-c-search" method="get" action="/admin/console/users" role="search">
+        <span class="pf-c-search__icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="m21 21-4.3-4.3"/>
+            </svg>
+        </span>
+        <input class="pf-c-form-control" type="search" name="search" value="{search}" placeholder="{i18n.get('common.searchUsers')}" aria-label="{i18n.get('common.searchUsers')}">
     </form>
-    <a class="pf-c-button pf-m-primary" href="/admin/console/users/create">{i18n.get('page.createUser')}</a>
+    <div class="ec-toolbar__actions">
+        <span class="ec-count">{users.size}</span>
+        <a class="pf-c-button pf-m-primary" href="/admin/console/users/create">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v14M5 12h14"/>
+            </svg>
+            {i18n.get('page.createUser')}
+        </a>
+    </div>
 </div>
 
 {#if users.isEmpty()}
-<div class="pf-c-empty">{i18n.get('common.noUsersFound')}</div>
+<div class="pf-c-empty">
+    <span class="pf-c-empty__icon" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+        </svg>
+    </span>
+    {i18n.get('common.noUsersFound')}
+</div>
 {#else}
 <table class="pf-c-table">
     <thead>
@@ -20,7 +43,7 @@
     {#for user in users}
     <tr>
         <td><a href="/admin/console/users/{user.id}/details">{user.username}</a></td>
-        <td>{#if user.email}{user.email}{#else}-{/if}</td>
+        <td>{#if user.email}{user.email}{#else}<span class="ec-muted">—</span>{/if}</td>
         <td>
             {#if user.enabled}
             <span class="pf-c-badge pf-m-success">{i18n.get('common.yes')}</span>

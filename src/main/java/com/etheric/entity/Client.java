@@ -52,20 +52,20 @@ public class Client extends PanacheEntityBase {
     @Column(name = "client_description")
     public String clientDescription;
 
-    @Column(name = "access_token_lifetime_seconds")
-    public Integer accessTokenLifetimeSeconds;
+    @Column(name = "access_token_lifetime_seconds", nullable = false)
+    public int accessTokenLifetimeSeconds;
 
-    @Column(name = "refresh_token_lifetime_seconds")
-    public Integer refreshTokenLifetimeSeconds;
+    @Column(name = "refresh_token_lifetime_seconds", nullable = false)
+    public int refreshTokenLifetimeSeconds;
 
-    @Column(name = "session_lifetime_seconds")
-    public Integer sessionLifetimeSeconds;
+    @Column(name = "session_lifetime_seconds", nullable = false)
+    public int sessionLifetimeSeconds;
 
-    @Column(name = "session_cookie_name")
+    @Column(name = "session_cookie_name", nullable = false)
     public String sessionCookieName;
 
-    @Column(name = "session_cookie_secure")
-    public Boolean sessionCookieSecure;
+    @Column(name = "session_cookie_secure", nullable = false)
+    public boolean sessionCookieSecure;
 
     public Client() {
     }
@@ -74,25 +74,25 @@ public class Client extends PanacheEntityBase {
                   List<String> redirectUris, List<String> scopes, List<String> grantTypes,
                   boolean enabled, OffsetDateTime createdAt, String clientDescription) {
         this(id, clientId, clientSecretHash, clientName, redirectUris, scopes, grantTypes,
-                enabled, createdAt, clientDescription, null, null, null, null, null);
+                enabled, createdAt, clientDescription, 3600, 604800, 28800, "SESSIONID", true);
     }
 
     public Client(UUID id, String clientId, String clientSecretHash, String clientName,
                   List<String> redirectUris, List<String> scopes, List<String> grantTypes,
                   boolean enabled, OffsetDateTime createdAt, String clientDescription,
-                  Integer accessTokenLifetimeSeconds, Integer refreshTokenLifetimeSeconds,
-                  Integer sessionLifetimeSeconds) {
+                  int accessTokenLifetimeSeconds, int refreshTokenLifetimeSeconds,
+                  int sessionLifetimeSeconds) {
         this(id, clientId, clientSecretHash, clientName, redirectUris, scopes, grantTypes,
                 enabled, createdAt, clientDescription, accessTokenLifetimeSeconds,
-                refreshTokenLifetimeSeconds, sessionLifetimeSeconds, null, null);
+                refreshTokenLifetimeSeconds, sessionLifetimeSeconds, "SESSIONID", true);
     }
 
     public Client(UUID id, String clientId, String clientSecretHash, String clientName,
                   List<String> redirectUris, List<String> scopes, List<String> grantTypes,
                   boolean enabled, OffsetDateTime createdAt, String clientDescription,
-                  Integer accessTokenLifetimeSeconds, Integer refreshTokenLifetimeSeconds,
-                  Integer sessionLifetimeSeconds, String sessionCookieName,
-                  Boolean sessionCookieSecure) {
+                  int accessTokenLifetimeSeconds, int refreshTokenLifetimeSeconds,
+                  int sessionLifetimeSeconds, String sessionCookieName,
+                  boolean sessionCookieSecure) {
         this.id = id;
         this.clientId = clientId;
         this.clientSecretHash = clientSecretHash;

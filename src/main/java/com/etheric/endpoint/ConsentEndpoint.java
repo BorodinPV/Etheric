@@ -1,10 +1,11 @@
 package com.etheric.endpoint;
 
+import com.etheric.logging.SecurityAuditLogger;
 import com.etheric.exception.OAuthError;
 import com.etheric.exception.OAuthException;
+import com.etheric.service.ConsentService;
 import com.etheric.service.TokenPolicyService;
 import com.etheric.service.UserClientMembershipService;
-import com.etheric.model.ConsentData;
 import com.etheric.model.SessionData;
 import com.etheric.repository.UserRepository;
 import com.etheric.service.CacheService;
@@ -38,10 +39,10 @@ public class ConsentEndpoint {
     CacheService cacheService;
 
     @Inject
-    com.etheric.service.AuthorizationCodeService authorizationCodeService;
+    ConsentService consentService;
 
     @Inject
-    com.etheric.config.EthericCacheConfig cacheConfig;
+    com.etheric.service.AuthorizationCodeService authorizationCodeService;
 
     @Inject
     SessionCookieFactory sessionCookieFactory;
@@ -51,6 +52,9 @@ public class ConsentEndpoint {
 
     @Inject
     UserClientMembershipService membershipService;
+
+    @Inject
+    SecurityAuditLogger securityAuditLogger;
 
     @GET
     @Produces(MediaType.TEXT_HTML)
@@ -136,7 +140,7 @@ public class ConsentEndpoint {
                             if ("approve".equals(action)) {
                                 return handleApprove(session, requestState, state);
                             }
-                            return handleDeny(requestState, state);
+                            return handleDeny(session, requestState, state);
                         });
                     });
         });
@@ -149,14 +153,14 @@ public class ConsentEndpoint {
                 return Uni.createFrom().failure(new OAuthException(
                         OAuthError.ACCESS_DENIED, requestState.getRedirectUri(), state));
             }
-            ConsentData consent = new ConsentData(requestState.getScope(), System.currentTimeMillis());
-            return cacheService.saveConsent(session.getUserId(), requestState.getClientId(), consent,
-                            cacheConfig.consentTtlSeconds())
+            return consentService.saveConsent(session.getUserId(), requestState.getClientId(), requestState.getScope())
                     .flatMap(v -> authorizationCodeService.issueCodeAndRedirect(session.getUserId(), requestState, state));
         });
     }
 
-    private Uni<Response> handleDeny(com.etheric.model.AuthorizationRequestState requestState, String state) {
+    private Uni<Response> handleDeny(SessionData session,
+                                       com.etheric.model.AuthorizationRequestState requestState, String state) {
+        securityAuditLogger.consentDenied(session.getUserId(), requestState.getClientId());
         return cacheService.deleteAuthorizationRequestState(state)
                 .replaceWith(Response.seeOther(OAuthRedirectBuilder.accessDenied(
                         requestState.getRedirectUri(), requestState.getState())).build());

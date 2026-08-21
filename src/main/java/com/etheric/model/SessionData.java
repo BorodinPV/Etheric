@@ -20,4 +20,11 @@ public class SessionData {
 
     @JsonProperty("created_at")
     private long createdAt;
+
+    @JsonProperty("client_id")
+    private String clientId;
+
+    public SessionData(String userId, String csrfToken, long createdAt) {
+        this(userId, csrfToken, createdAt, null);
+    }
 }

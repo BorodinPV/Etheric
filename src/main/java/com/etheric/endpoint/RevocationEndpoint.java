@@ -1,7 +1,7 @@
 package com.etheric.endpoint;
 
-import com.etheric.service.CacheService;
 import com.etheric.service.ClientAuthService;
+import com.etheric.service.TokenRevocationService;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
@@ -17,7 +17,7 @@ import jakarta.ws.rs.core.Response;
 public class RevocationEndpoint {
 
     @Inject
-    CacheService cacheService;
+    TokenRevocationService tokenRevocationService;
 
     @Inject
     ClientAuthService clientAuthService;
@@ -32,26 +32,7 @@ public class RevocationEndpoint {
             @Context HttpHeaders headers) {
 
         return clientAuthService.authenticateRequired(clientId, clientSecret, headers)
-                .flatMap(client -> revokeToken(token, tokenTypeHint))
+                .flatMap(client -> tokenRevocationService.revoke(token, tokenTypeHint))
                 .replaceWith(Response.ok().build());
-    }
-
-    private Uni<Void> revokeToken(String token, String tokenTypeHint) {
-        if (token == null || token.isBlank()) {
-            return Uni.createFrom().voidItem();
-        }
-        if ("refresh_token".equals(tokenTypeHint)) {
-            return cacheService.deleteRefreshToken(token)
-                    .flatMap(v -> cacheService.deleteAccessToken(token))
-                    .replaceWithVoid();
-        }
-        if ("access_token".equals(tokenTypeHint)) {
-            return cacheService.deleteAccessToken(token)
-                    .flatMap(v -> cacheService.deleteRefreshToken(token))
-                    .replaceWithVoid();
-        }
-        return cacheService.deleteAccessToken(token)
-                .flatMap(v -> cacheService.deleteRefreshToken(token))
-                .replaceWithVoid();
     }
 }

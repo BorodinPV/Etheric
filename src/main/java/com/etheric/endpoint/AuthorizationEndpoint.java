@@ -7,9 +7,11 @@ import com.etheric.exception.OAuthException;
 import com.etheric.model.AuthorizationRequestState;
 import com.etheric.repository.ClientRepository;
 import com.etheric.service.AuthorizationCodeService;
+import com.etheric.service.ConsentService;
 import com.etheric.service.TokenPolicyService;
 import com.etheric.service.UserClientMembershipService;
 import com.etheric.service.CacheService;
+import com.etheric.logging.SecurityAuditLogger;
 import com.etheric.util.OAuthRedirectBuilder;
 import com.etheric.util.PkceUtil;
 import com.etheric.util.ScopeUtil;
@@ -57,7 +59,13 @@ public class AuthorizationEndpoint {
     TokenPolicyService tokenPolicyService;
 
     @Inject
+    ConsentService consentService;
+
+    @Inject
     UserClientMembershipService membershipService;
+
+    @Inject
+    SecurityAuditLogger securityAuditLogger;
 
     @GET
     public Uni<Response> authorize(
@@ -111,6 +119,9 @@ public class AuthorizationEndpoint {
     private String resolvePkceMethod(String codeChallenge, String codeChallengeMethod,
                                      String redirectUri, String state) {
         if (codeChallenge != null && !codeChallenge.isBlank()) {
+            if ("plain".equals(codeChallengeMethod)) {
+                throw new OAuthException(OAuthError.INVALID_REQUEST, redirectUri, state);
+            }
             String method = (codeChallengeMethod == null || codeChallengeMethod.isBlank())
                     ? PkceUtil.METHOD_S256 : codeChallengeMethod;
             if (!PkceUtil.isSupportedMethod(method)) {
@@ -151,10 +162,12 @@ public class AuthorizationEndpoint {
         return membershipService.isMember(requestState.getUserId(), requestState.getClientId())
                 .flatMap(member -> {
                     if (!member) {
+                        securityAuditLogger.accessDenied(
+                                requestState.getUserId(), requestState.getClientId(), "not_a_member");
                         return Uni.createFrom().failure(new OAuthException(
                                 OAuthError.ACCESS_DENIED, requestState.getRedirectUri(), state));
                     }
-                    return cacheService.getConsent(requestState.getUserId(), requestState.getClientId())
+                    return consentService.getConsent(requestState.getUserId(), requestState.getClientId())
                             .flatMap(consent -> {
                                 if (consent != null && ScopeUtil.coversScopes(consent.getScopes(), requestState.getScope())) {
                                     return authorizationCodeService.issueCodeAndRedirect(

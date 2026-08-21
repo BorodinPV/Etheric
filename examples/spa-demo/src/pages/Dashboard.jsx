@@ -165,7 +165,7 @@ export default function Dashboard() {
 
       <section className="introspection">
         <h2>Token introspection</h2>
-        <p>Access token checked via dev-only Vite proxy (confidential client server-side).</p>
+        <p>Access token checked via RFC 7662 POST /introspect (dev BFF adds client auth server-side).</p>
 
         {introspecting && !introspection && <p>Introspecting…</p>}
 

@@ -29,4 +29,19 @@ public class ClientRegistrationRequest {
     /** Optional custom client_id; generated if omitted. */
     @JsonProperty("client_id")
     private String clientId;
+
+    @JsonProperty("access_token_lifetime_seconds")
+    private Integer accessTokenLifetimeSeconds;
+
+    @JsonProperty("refresh_token_lifetime_seconds")
+    private Integer refreshTokenLifetimeSeconds;
+
+    @JsonProperty("session_lifetime_seconds")
+    private Integer sessionLifetimeSeconds;
+
+    @JsonProperty("session_cookie_name")
+    private String sessionCookieName;
+
+    @JsonProperty("session_cookie_secure")
+    private Boolean sessionCookieSecure;
 }

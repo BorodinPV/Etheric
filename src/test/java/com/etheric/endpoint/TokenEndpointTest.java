@@ -2,10 +2,10 @@ package com.etheric.endpoint;
 
 import com.etheric.model.AccessTokenData;
 import com.etheric.model.AuthorizationCodeData;
-import com.etheric.model.ConsentData;
 import com.etheric.model.RefreshTokenData;
 import com.etheric.model.SessionData;
 import com.etheric.service.CacheService;
+import com.etheric.service.ConsentService;
 import com.etheric.service.JwtService;
 import com.etheric.util.PkceUtil;
 import io.quarkus.test.junit.QuarkusTest;
@@ -30,6 +30,9 @@ class TokenEndpointTest {
 
     @Inject
     CacheService cacheService;
+
+    @Inject
+    ConsentService consentService;
 
     @Inject
     JwtService jwtService;
@@ -330,6 +333,35 @@ class TokenEndpointTest {
     }
 
     @Test
+    void token_refreshToken_reuseOldToken_returnsInvalidGrant() {
+        String refreshToken = "reuse-refresh-token";
+        awaitVoid(cacheService.saveRefreshToken(refreshToken, new RefreshTokenData(
+            TEST_USER_ID, "test-client", List.of("openid")
+        ), 604800));
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "refresh_token")
+            .formParam("refresh_token", refreshToken)
+            .formParam("client_id", "test-client")
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(200);
+
+        given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "refresh_token")
+            .formParam("refresh_token", refreshToken)
+            .formParam("client_id", "test-client")
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(400)
+            .body("error", equalTo("invalid_grant"));
+    }
+
+    @Test
     void token_refreshToken_withScope_usesProvidedScope() {
         String refreshToken = "scope-refresh-token";
         awaitVoid(cacheService.saveRefreshToken(refreshToken, new RefreshTokenData(
@@ -499,8 +531,7 @@ class TokenEndpointTest {
     void token_authCode_pkceWithoutSecret_succeeds() {
         String sessionId = UUID.randomUUID().toString();
         awaitVoid(cacheService.saveSession(sessionId, new SessionData(TEST_USER_ID, null, System.currentTimeMillis()), 1800));
-        awaitVoid(cacheService.saveConsent(TEST_USER_ID, "test-client",
-                new ConsentData(List.of("openid", "profile", "email"), System.currentTimeMillis()), 86400));
+        awaitVoid(() -> consentService.saveConsent(TEST_USER_ID, "test-client", List.of("openid", "profile", "email")));
 
         String state = UUID.randomUUID().toString();
         String challenge = PkceUtil.s256Challenge(PKCE_VERIFIER);
@@ -545,8 +576,7 @@ class TokenEndpointTest {
     void token_authCode_noPkceWithoutSecret_returnsInvalidClient() {
         String sessionId = UUID.randomUUID().toString();
         awaitVoid(cacheService.saveSession(sessionId, new SessionData(TEST_USER_ID, null, System.currentTimeMillis()), 1800));
-        awaitVoid(cacheService.saveConsent(TEST_USER_ID, "test-client",
-                new ConsentData(List.of("openid", "profile", "email"), System.currentTimeMillis()), 86400));
+        awaitVoid(() -> consentService.saveConsent(TEST_USER_ID, "test-client", List.of("openid", "profile", "email")));
 
         String state = UUID.randomUUID().toString();
 

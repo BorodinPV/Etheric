@@ -165,6 +165,26 @@ class AuthorizationEndpointTest {
     }
 
     @Test
+    void authorize_plainPkceMethod_redirectsWithInvalidRequest() {
+        given()
+            .queryParam("response_type", "code")
+            .queryParam("client_id", CLIENT_ID)
+            .queryParam("redirect_uri", REDIRECT_URI)
+            .queryParam("state", "plainpkce")
+            .queryParam("code_challenge", "some-challenge")
+            .queryParam("code_challenge_method", "plain")
+            .redirects().follow(false)
+        .when()
+            .get("/authorize")
+        .then()
+            .statusCode(302)
+            .header("Location", allOf(
+                containsString("error=invalid_request"),
+                containsString("state=plainpkce")
+            ));
+    }
+
+    @Test
     void authorize_validRequest_withScopes_savesStateToCache() {
         given()
             .queryParam("response_type", "code")

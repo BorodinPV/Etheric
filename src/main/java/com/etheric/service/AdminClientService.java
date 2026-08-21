@@ -1,6 +1,7 @@
 package com.etheric.service;
 
 import com.etheric.entity.Client;
+import com.etheric.model.ClientOAuthPolicy;
 import com.etheric.model.ClientRegistrationRequest;
 import com.etheric.model.ClientUpdateRequest;
 import com.etheric.model.ClientRegistrationResponse;
@@ -25,6 +26,9 @@ public class AdminClientService {
     @Inject
     PasswordService passwordService;
 
+    @Inject
+    TokenPolicyService tokenPolicyService;
+
     public Uni<AdminServiceResult<ClientRegistrationResponse>> register(ClientRegistrationRequest request) {
         if (request == null
                 || request.getClientName() == null || request.getClientName().isBlank()
@@ -38,6 +42,16 @@ public class AdminClientService {
                 return Uni.createFrom().item(AdminServiceResult.badRequest(
                         "invalid_request", "redirect_uris must not contain blank values"));
             }
+        }
+
+        OAuthSettings oauthSettings = resolveOAuthSettingsForClient(
+                request.getAccessTokenLifetimeSeconds(),
+                request.getRefreshTokenLifetimeSeconds(),
+                request.getSessionLifetimeSeconds(),
+                request.getSessionCookieName(),
+                request.getSessionCookieSecure());
+        if (oauthSettings.error() != null) {
+            return Uni.createFrom().item(AdminServiceResult.badRequest("invalid_request", oauthSettings.error()));
         }
 
         String clientId = request.getClientId();
@@ -63,7 +77,12 @@ public class AdminClientService {
             Client client = new Client(
                     UUID.randomUUID(), resolvedClientId, secretHash, request.getClientName().trim(),
                     List.copyOf(request.getRedirectUris()), scopes, grantTypes, true,
-                    OffsetDateTime.now(), request.getClientDescription());
+                    OffsetDateTime.now(), request.getClientDescription(),
+                    oauthSettings.accessTokenLifetimeSeconds(),
+                    oauthSettings.refreshTokenLifetimeSeconds(),
+                    oauthSettings.sessionLifetimeSeconds(),
+                    oauthSettings.sessionCookieName(),
+                    oauthSettings.sessionCookieSecure());
 
             return clientRepository.persistClient(client)
                     .map(saved -> AdminServiceResult.ok(toResponse(saved, plaintextSecret)));
@@ -91,7 +110,12 @@ public class AdminClientService {
                 && request.getScopes() == null
                 && request.getGrantTypes() == null
                 && request.getEnabled() == null
-                && request.getClientDescription() == null) {
+                && request.getClientDescription() == null
+                && request.getAccessTokenLifetimeSeconds() == null
+                && request.getRefreshTokenLifetimeSeconds() == null
+                && request.getSessionLifetimeSeconds() == null
+                && request.getSessionCookieName() == null
+                && request.getSessionCookieSecure() == null) {
             return Uni.createFrom().item(AdminServiceResult.badRequest(
                     "invalid_request", "at least one field must be provided"));
         }
@@ -125,6 +149,10 @@ public class AdminClientService {
                 return Uni.createFrom().item(AdminServiceResult.notFound("not_found", "Client not found"));
             }
             Client client = opt.get();
+            OAuthSettings oauthSettings = resolveOAuthSettingsForUpdate(client, request);
+            if (oauthSettings.error() != null) {
+                return Uni.createFrom().item(AdminServiceResult.badRequest("invalid_request", oauthSettings.error()));
+            }
             if (request.getClientName() != null) {
                 client.clientName = request.getClientName().trim();
             }
@@ -144,6 +172,13 @@ public class AdminClientService {
                 client.clientDescription = request.getClientDescription().isBlank()
                         ? null : request.getClientDescription().trim();
             }
+            if (oauthSettings.apply()) {
+                client.accessTokenLifetimeSeconds = oauthSettings.accessTokenLifetimeSeconds();
+                client.refreshTokenLifetimeSeconds = oauthSettings.refreshTokenLifetimeSeconds();
+                client.sessionLifetimeSeconds = oauthSettings.sessionLifetimeSeconds();
+                client.sessionCookieName = oauthSettings.sessionCookieName();
+                client.sessionCookieSecure = oauthSettings.sessionCookieSecure();
+            }
             return clientRepository.updateClient(client)
                     .flatMap(ignored -> clientRepository.findByClientId(clientId))
                     .map(updated -> AdminServiceResult.ok(toResponse(updated.orElseThrow(), null)));
@@ -154,40 +189,16 @@ public class AdminClientService {
             String clientId, Integer accessTokenLifetimeSeconds,
             Integer refreshTokenLifetimeSeconds, Integer sessionLifetimeSeconds,
             String sessionCookieName, Boolean sessionCookieSecure) {
-        if (accessTokenLifetimeSeconds != null && accessTokenLifetimeSeconds <= 0) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "access_token_lifetime_seconds must be positive"));
-        }
-        if (refreshTokenLifetimeSeconds != null && refreshTokenLifetimeSeconds <= 0) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "refresh_token_lifetime_seconds must be positive"));
-        }
-        if (sessionLifetimeSeconds != null && sessionLifetimeSeconds <= 0) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "session_lifetime_seconds must be positive"));
-        }
-        String cookieNameError = TokenPolicyService.validateCookieName(sessionCookieName);
-        if (cookieNameError != null) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest("invalid_request", cookieNameError));
-        }
-
-        return clientRepository.findByClientId(clientId).flatMap(opt -> {
-            if (opt.isEmpty()) {
-                return Uni.createFrom().item(AdminServiceResult.notFound("not_found", "Client not found"));
-            }
-            Client client = opt.get();
-            client.accessTokenLifetimeSeconds = accessTokenLifetimeSeconds;
-            client.refreshTokenLifetimeSeconds = refreshTokenLifetimeSeconds;
-            client.sessionLifetimeSeconds = sessionLifetimeSeconds;
-            client.sessionCookieName = TokenPolicyService.normalizeOptionalCookieName(sessionCookieName);
-            client.sessionCookieSecure = sessionCookieSecure;
-            return clientRepository.updateClient(client)
-                    .flatMap(ignored -> clientRepository.findByClientId(clientId))
-                    .map(updated -> AdminServiceResult.ok(toResponse(updated.orElseThrow(), null)));
-        });
+        ClientUpdateRequest request = new ClientUpdateRequest();
+        request.setAccessTokenLifetimeSeconds(accessTokenLifetimeSeconds);
+        request.setRefreshTokenLifetimeSeconds(refreshTokenLifetimeSeconds);
+        request.setSessionLifetimeSeconds(sessionLifetimeSeconds);
+        request.setSessionCookieName(sessionCookieName);
+        request.setSessionCookieSecure(sessionCookieSecure);
+        return update(clientId, request);
     }
 
-    /** @deprecated Use {@link #updateOAuthSettings} */
+    /** @deprecated Use {@link #update} with OAuth fields */
     public Uni<AdminServiceResult<ClientRegistrationResponse>> updateTokenLifetimes(
             String clientId, Integer accessTokenLifetimeSeconds,
             Integer refreshTokenLifetimeSeconds, Integer sessionLifetimeSeconds) {
@@ -214,5 +225,87 @@ public class AdminClientService {
                 client.scopes, client.grantTypes, client.enabled, client.clientDescription,
                 client.accessTokenLifetimeSeconds, client.refreshTokenLifetimeSeconds,
                 client.sessionLifetimeSeconds, client.sessionCookieName, client.sessionCookieSecure);
+    }
+
+    private OAuthSettings resolveOAuthSettingsForUpdate(Client client, ClientUpdateRequest request) {
+        boolean hasOAuthUpdate = request.getAccessTokenLifetimeSeconds() != null
+                || request.getRefreshTokenLifetimeSeconds() != null
+                || request.getSessionLifetimeSeconds() != null
+                || request.getSessionCookieName() != null
+                || request.getSessionCookieSecure() != null;
+        if (!hasOAuthUpdate) {
+            return OAuthSettings.skip();
+        }
+        return resolveOAuthSettings(
+                request.getAccessTokenLifetimeSeconds() != null
+                        ? request.getAccessTokenLifetimeSeconds() : client.accessTokenLifetimeSeconds,
+                request.getRefreshTokenLifetimeSeconds() != null
+                        ? request.getRefreshTokenLifetimeSeconds() : client.refreshTokenLifetimeSeconds,
+                request.getSessionLifetimeSeconds() != null
+                        ? request.getSessionLifetimeSeconds() : client.sessionLifetimeSeconds,
+                request.getSessionCookieName() != null
+                        ? request.getSessionCookieName() : client.sessionCookieName,
+                request.getSessionCookieSecure() != null
+                        ? request.getSessionCookieSecure() : client.sessionCookieSecure);
+    }
+
+    private OAuthSettings resolveOAuthSettingsForClient(Integer accessTokenLifetimeSeconds,
+                                                          Integer refreshTokenLifetimeSeconds,
+                                                          Integer sessionLifetimeSeconds,
+                                                          String sessionCookieName,
+                                                          Boolean sessionCookieSecure) {
+        ClientOAuthPolicy defaults = tokenPolicyService.defaultOAuthPolicy();
+        return resolveOAuthSettings(
+                accessTokenLifetimeSeconds != null
+                        ? accessTokenLifetimeSeconds : (int) defaults.getAccessTokenLifetimeSeconds(),
+                refreshTokenLifetimeSeconds != null
+                        ? refreshTokenLifetimeSeconds : (int) defaults.getRefreshTokenLifetimeSeconds(),
+                sessionLifetimeSeconds != null
+                        ? sessionLifetimeSeconds : (int) defaults.getSessionLifetimeSeconds(),
+                sessionCookieName != null ? sessionCookieName : defaults.getSessionCookieName(),
+                sessionCookieSecure != null ? sessionCookieSecure : defaults.isSessionCookieSecure());
+    }
+
+    private OAuthSettings resolveOAuthSettings(int accessTokenLifetimeSeconds,
+                                                 int refreshTokenLifetimeSeconds,
+                                                 int sessionLifetimeSeconds,
+                                                 String sessionCookieName,
+                                                 boolean sessionCookieSecure) {
+        if (accessTokenLifetimeSeconds <= 0 || refreshTokenLifetimeSeconds <= 0 || sessionLifetimeSeconds <= 0) {
+            return OAuthSettings.error("token and session lifetimes must be positive");
+        }
+        String cookieName = TokenPolicyService.normalizeCookieName(sessionCookieName);
+        String cookieNameError = TokenPolicyService.validateCookieName(cookieName);
+        if (cookieNameError != null) {
+            return OAuthSettings.error(cookieNameError);
+        }
+
+        return OAuthSettings.of(accessTokenLifetimeSeconds, refreshTokenLifetimeSeconds,
+                sessionLifetimeSeconds, cookieName, sessionCookieSecure);
+    }
+
+    private record OAuthSettings(
+            boolean apply,
+            String error,
+            int accessTokenLifetimeSeconds,
+            int refreshTokenLifetimeSeconds,
+            int sessionLifetimeSeconds,
+            String sessionCookieName,
+            boolean sessionCookieSecure) {
+
+        static OAuthSettings skip() {
+            return new OAuthSettings(false, null, 0, 0, 0, null, false);
+        }
+
+        static OAuthSettings error(String message) {
+            return new OAuthSettings(false, message, 0, 0, 0, null, false);
+        }
+
+        static OAuthSettings of(int accessTokenLifetimeSeconds, int refreshTokenLifetimeSeconds,
+                                int sessionLifetimeSeconds, String sessionCookieName,
+                                boolean sessionCookieSecure) {
+            return new OAuthSettings(true, null, accessTokenLifetimeSeconds, refreshTokenLifetimeSeconds,
+                    sessionLifetimeSeconds, sessionCookieName, sessionCookieSecure);
+        }
     }
 }

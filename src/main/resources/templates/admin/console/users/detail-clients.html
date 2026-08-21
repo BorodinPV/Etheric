@@ -1,8 +1,4 @@
-<div class="pf-c-tabs">
-    <a class="pf-c-tabs__link {#if activeTab == 'details'}active{/if}" href="/admin/console/users/{userId}/details">{i18n.get('tab.details')}</a>
-    <a class="pf-c-tabs__link {#if activeTab == 'credentials'}active{/if}" href="/admin/console/users/{userId}/credentials">{i18n.get('tab.credentials')}</a>
-    <a class="pf-c-tabs__link {#if activeTab == 'clients'}active{/if}" href="/admin/console/users/{userId}/clients">{i18n.get('tab.clients')}</a>
-</div>
+{#include admin/console/users/tabs /}
 
 {#if success}
 <div class="pf-c-alert pf-m-success">{success}</div>
@@ -14,25 +10,42 @@
 <form method="post" action="/admin/console/users/{userId}/clients">
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
-    <div class="pf-c-form__group">
-        <div class="pf-c-form__label pf-c-form__label--with-hint">
-            <span>{i18n.get('tab.clients')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.user.clientsMembership') /}
+    <div class="ec-card">
+        <div class="ec-card__header">
+            <div class="ec-card__title pf-c-form__label--with-hint">
+                <span>{i18n.get('tab.clients')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.user.clientsMembership') /}
+            </div>
+            <p class="ec-card__description">{i18n.get('user.clients.hint')}</p>
         </div>
 
         {#if assignments.isEmpty()}
-        <p>{i18n.get('user.clients.noClients')}</p>
-        {#else}
-        {#for item in assignments}
-        <div class="pf-c-checkbox">
-            <label>
-                <input type="checkbox" name="client_ids" value="{item.id}" {#if item.assigned}checked{/if}>
-                {item.label}
-            </label>
+        <div class="pf-c-empty">
+            <span class="pf-c-empty__icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="7" height="7" x="3" y="3" rx="1.5"/>
+                    <rect width="7" height="7" x="14" y="3" rx="1.5"/>
+                    <rect width="7" height="7" x="14" y="14" rx="1.5"/>
+                    <rect width="7" height="7" x="3" y="14" rx="1.5"/>
+                </svg>
+            </span>
+            {i18n.get('user.clients.noClients')}
         </div>
-        {/for}
+        {#else}
+        <div class="ec-choice-list">
+            {#for item in assignments}
+            <div class="pf-c-checkbox">
+                <label>
+                    <input type="checkbox" name="client_ids" value="{item.id}" {#if item.assigned}checked{/if}>
+                    <span>{item.label}</span>
+                </label>
+            </div>
+            {/for}
+        </div>
         {/if}
-    </div>
 
-    <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.save')}</button>
+        <div class="ec-form-actions">
+            <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.save')}</button>
+        </div>
+    </div>
 </form>

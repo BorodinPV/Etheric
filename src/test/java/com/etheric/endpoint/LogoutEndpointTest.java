@@ -46,8 +46,48 @@ class LogoutEndpointTest {
             .header("Location", endsWith("/"))
             .header("Set-Cookie", containsString("SESSIONID=;"));
 
-        // Verify session was deleted
         org.junit.jupiter.api.Assertions.assertNull(await(cacheService.getSession(sessionId)));
+    }
+
+    @Test
+    void logout_deletesAllUserSessionsEvenWhenOnlyOneCookiePresent() {
+        String sessionId1 = UUID.randomUUID().toString();
+        String sessionId2 = UUID.randomUUID().toString();
+        awaitVoid(cacheService.saveSession(sessionId1, new SessionData("user1", null, System.currentTimeMillis()), 1800));
+        awaitVoid(cacheService.saveSession(sessionId2, new SessionData("user1", null, System.currentTimeMillis()), 1800));
+
+        given()
+            .cookie("SESSIONID", sessionId1)
+            .redirects().follow(false)
+        .when()
+            .get("/logout")
+        .then()
+            .statusCode(303);
+
+        org.junit.jupiter.api.Assertions.assertNull(await(cacheService.getSession(sessionId1)));
+        org.junit.jupiter.api.Assertions.assertNull(await(cacheService.getSession(sessionId2)));
+    }
+
+    @Test
+    void logout_withClientId_deletesOnlyMatchingClientSessions() {
+        String clientASession = UUID.randomUUID().toString();
+        String clientBSession = UUID.randomUUID().toString();
+        awaitVoid(cacheService.saveSession(clientASession,
+                new SessionData("user1", null, System.currentTimeMillis(), "test-client"), 1800));
+        awaitVoid(cacheService.saveSession(clientBSession,
+                new SessionData("user1", null, System.currentTimeMillis(), "other-client"), 1800));
+
+        given()
+            .cookie("SESSIONID", clientASession)
+            .queryParam("client_id", "test-client")
+            .redirects().follow(false)
+        .when()
+            .get("/logout")
+        .then()
+            .statusCode(303);
+
+        org.junit.jupiter.api.Assertions.assertNull(await(cacheService.getSession(clientASession)));
+        org.junit.jupiter.api.Assertions.assertNotNull(await(cacheService.getSession(clientBSession)));
     }
 
     @Test

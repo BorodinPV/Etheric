@@ -26,7 +26,7 @@ public class AdminAuthFilter {
 
     public static final String HEADER_NAME = "X-Admin-Api-Key";
 
-    private static final Pattern CSS_PATH = Pattern.compile("^admin/[^/]+\\.css$");
+    private static final Pattern STATIC_ASSET_PATH = Pattern.compile("^admin/[^/]+\\.(css|js)$");
 
     @Inject
     EthericAdminConfig adminConfig;
@@ -100,7 +100,7 @@ public class AdminAuthFilter {
         if ("admin/console/login".equals(path) || "admin/console/locale".equals(path)) {
             return true;
         }
-        return CSS_PATH.matcher(path).matches();
+        return STATIC_ASSET_PATH.matcher(path).matches();
     }
 
     private static boolean isJsonAdminApi(String path) {

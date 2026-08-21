@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { hasValidSession, startLogin, startRegistration } from '../auth';
+import { hasValidSession, startLogin, startRegistration, validateSession } from '../auth';
 
 export default function Home() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [checkingSession, setCheckingSession] = useState(hasValidSession());
 
   useEffect(() => {
     if (searchParams.get('registered') === '1') {
@@ -12,9 +13,35 @@ export default function Home() {
     }
   }, [searchParams]);
 
-  if (hasValidSession()) {
-    navigate('/dashboard', { replace: true });
-    return null;
+  useEffect(() => {
+    if (!hasValidSession()) {
+      setCheckingSession(false);
+      return;
+    }
+
+    let cancelled = false;
+    validateSession().then((ok) => {
+      if (cancelled) {
+        return;
+      }
+      if (ok) {
+        navigate('/dashboard', { replace: true });
+      } else {
+        setCheckingSession(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
+  if (checkingSession) {
+    return (
+      <div className="card">
+        <p>Checking session…</p>
+      </div>
+    );
   }
 
   const registered = searchParams.get('registered') === '1';

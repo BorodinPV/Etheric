@@ -14,113 +14,117 @@
 <form method="post" action="/admin/console/clients/{clientId}/settings">
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint">
-            <span>{i18n.get('common.clientId')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.clientId') /}
-        </label>
-        <input class="pf-c-form-control" type="text" value="{client.clientId}" disabled>
-    </div>
+    <div class="ec-card">
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint">
+                <span>{i18n.get('common.clientId')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.clientId') /}
+            </label>
+            <input class="pf-c-form-control ec-mono" type="text" value="{client.clientId}" disabled>
+        </div>
 
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="client_name">
-            <span>{i18n.get('common.name')} *</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.name') /}
-        </label>
-        <input class="pf-c-form-control" type="text" id="client_name" name="client_name" value="{client.clientName}" required>
-    </div>
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint" for="client_name">
+                <span>{i18n.get('common.name')} *</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.name') /}
+            </label>
+            <input class="pf-c-form-control" type="text" id="client_name" name="client_name" value="{client.clientName}" required>
+        </div>
 
-    <div class="pf-c-form__group pf-c-checkbox">
-        <label class="pf-c-form__label--with-hint">
-            <input type="checkbox" name="enabled" {#if client.enabled}checked{/if}>
-            <span>{i18n.get('common.enabled')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.enabled') /}
-        </label>
-    </div>
+        <div class="pf-c-form__group pf-c-checkbox">
+            <label class="pf-c-form__label--with-hint">
+                <input type="checkbox" name="enabled" {#if client.enabled}checked{/if}>
+                <span>{i18n.get('common.enabled')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.enabled') /}
+            </label>
+        </div>
 
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="redirect_uris">
-            <span>{i18n.get('client.settings.redirectUris')} *</span>
-            {#include admin/console/field-hint text=i18n.get('hint.client.redirectUris') /}
-        </label>
-        <textarea class="pf-c-form-control" id="redirect_uris" name="redirect_uris" required>{#for uri in client.redirectUris}{uri}
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint" for="redirect_uris">
+                <span>{i18n.get('client.settings.redirectUris')} *</span>
+                {#include admin/console/field-hint text=i18n.get('hint.client.redirectUris') /}
+            </label>
+            <textarea class="pf-c-form-control" id="redirect_uris" name="redirect_uris" required>{#for uri in client.redirectUris}{uri}
 {/for}</textarea>
+            <p class="pf-c-form__helper">{i18n.get('common.helper.oneUriPerLine')}</p>
+        </div>
+
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint" for="scopes">
+                <span>{i18n.get('common.scopes')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.scopes') /}
+            </label>
+            <input class="pf-c-form-control" type="text" id="scopes" name="scopes" value="{#for s in client.scopes}{s} {/for}">
+            <p class="pf-c-form__helper">{i18n.get('common.helper.spaceCommaSeparated')}</p>
+        </div>
+
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint" for="grant_types">
+                <span>{i18n.get('common.grantTypes')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.grantTypes') /}
+            </label>
+            <input class="pf-c-form-control" type="text" id="grant_types" name="grant_types" value="{#for g in client.grantTypes}{g} {/for}">
+        </div>
+
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint" for="client_description">
+                <span>{i18n.get('common.description')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.description') /}
+            </label>
+            <input class="pf-c-form-control" type="text" id="client_description" name="client_description" value="{client.clientDescription}">
+        </div>
+
+        <h2 class="ec-section-title">{i18n.get('client.settings.oauthSession')}</h2>
+        <p class="ec-section-description">{i18n.get('client.settings.oauthSessionIntro')}</p>
+
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint" for="session_cookie_name">
+                <span>{i18n.get('client.settings.sessionCookieName')} *</span>
+                {#include admin/console/field-hint text=i18n.get('hint.client.sessionCookieName') /}
+            </label>
+            <input class="pf-c-form-control ec-mono" type="text" id="session_cookie_name" name="session_cookie_name"
+                   value="{client.sessionCookieName}" required pattern="[A-Za-z0-9_-]+">
+        </div>
+
+        <div class="pf-c-form__group pf-c-checkbox">
+            <label class="pf-c-form__label--with-hint">
+                <input type="checkbox" name="session_cookie_secure" {#if client.sessionCookieSecure}checked{/if}>
+                <span>{i18n.get('client.settings.secureCookieFlag')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.client.secureCookieFlag') /}
+            </label>
+        </div>
+
+        <div class="ec-form-grid">
+            <div class="pf-c-form__group">
+                <label class="pf-c-form__label pf-c-form__label--with-hint" for="access_token_lifetime_seconds">
+                    <span>{i18n.get('client.settings.accessTokenLifetime')} *</span>
+                    {#include admin/console/field-hint text=i18n.get('hint.client.accessTokenLifetime') /}
+                </label>
+                <input class="pf-c-form-control" type="number" id="access_token_lifetime_seconds" name="access_token_lifetime_seconds"
+                       value="{client.accessTokenLifetimeSeconds}" min="1" required>
+            </div>
+
+            <div class="pf-c-form__group">
+                <label class="pf-c-form__label pf-c-form__label--with-hint" for="refresh_token_lifetime_seconds">
+                    <span>{i18n.get('client.settings.refreshTokenLifetime')} *</span>
+                    {#include admin/console/field-hint text=i18n.get('hint.client.refreshTokenLifetime') /}
+                </label>
+                <input class="pf-c-form-control" type="number" id="refresh_token_lifetime_seconds" name="refresh_token_lifetime_seconds"
+                       value="{client.refreshTokenLifetimeSeconds}" min="1" required>
+            </div>
+
+            <div class="pf-c-form__group">
+                <label class="pf-c-form__label pf-c-form__label--with-hint" for="session_lifetime_seconds">
+                    <span>{i18n.get('client.settings.sessionLifetime')} *</span>
+                    {#include admin/console/field-hint text=i18n.get('hint.client.sessionLifetime') /}
+                </label>
+                <input class="pf-c-form-control" type="number" id="session_lifetime_seconds" name="session_lifetime_seconds"
+                       value="{client.sessionLifetimeSeconds}" min="1" required>
+            </div>
+        </div>
+
+        <div class="ec-form-actions">
+            <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.save')}</button>
+        </div>
     </div>
-
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="scopes">
-            <span>{i18n.get('common.scopes')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.scopes') /}
-        </label>
-        <input class="pf-c-form-control" type="text" id="scopes" name="scopes" value="{#for s in client.scopes}{s} {/for}">
-    </div>
-
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="grant_types">
-            <span>{i18n.get('common.grantTypes')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.grantTypes') /}
-        </label>
-        <input class="pf-c-form-control" type="text" id="grant_types" name="grant_types" value="{#for g in client.grantTypes}{g} {/for}">
-    </div>
-
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="client_description">
-            <span>{i18n.get('common.description')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.description') /}
-        </label>
-        <input class="pf-c-form-control" type="text" id="client_description" name="client_description" value="{client.clientDescription}">
-    </div>
-
-    <h2>{i18n.get('client.settings.tokenOverrides')}</h2>
-    <p>{i18n.get('client.settings.tokenOverridesHint')} <a href="/admin/console/settings">{i18n.get('client.settings.serverSettingsLink')}</a>.</p>
-
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="session_cookie_name">
-            <span>{i18n.get('client.settings.sessionCookieName')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.client.sessionCookieName') /}
-        </label>
-        <input class="pf-c-form-control" type="text" id="session_cookie_name" name="session_cookie_name"
-               value="{client.sessionCookieName}" pattern="[A-Za-z0-9_-]+">
-    </div>
-
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="session_cookie_secure">
-            <span>{i18n.get('client.settings.secureCookieFlag')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.client.secureCookieFlag') /}
-        </label>
-        <select class="pf-c-form-control" id="session_cookie_secure" name="session_cookie_secure">
-            <option value="" {#if client.sessionCookieSecure == null}selected{/if}>{i18n.get('client.settings.serverDefault')}</option>
-            <option value="true" {#if client.sessionCookieSecure == true}selected{/if}>{i18n.get('client.settings.secureHttps')}</option>
-            <option value="false" {#if client.sessionCookieSecure == false}selected{/if}>{i18n.get('client.settings.notSecure')}</option>
-        </select>
-    </div>
-
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="access_token_lifetime_seconds">
-            <span>{i18n.get('client.settings.accessTokenLifetime')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.client.accessTokenLifetime') /}
-        </label>
-        <input class="pf-c-form-control" type="number" id="access_token_lifetime_seconds" name="access_token_lifetime_seconds"
-               value="{client.accessTokenLifetimeSeconds}" min="1">
-    </div>
-
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="refresh_token_lifetime_seconds">
-            <span>{i18n.get('client.settings.refreshTokenLifetime')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.client.refreshTokenLifetime') /}
-        </label>
-        <input class="pf-c-form-control" type="number" id="refresh_token_lifetime_seconds" name="refresh_token_lifetime_seconds"
-               value="{client.refreshTokenLifetimeSeconds}" min="1">
-    </div>
-
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="session_lifetime_seconds">
-            <span>{i18n.get('client.settings.sessionLifetime')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.client.sessionLifetime') /}
-        </label>
-        <input class="pf-c-form-control" type="number" id="session_lifetime_seconds" name="session_lifetime_seconds"
-               value="{client.sessionLifetimeSeconds}" min="1">
-    </div>
-
-    <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.save')}</button>
 </form>

@@ -1,15 +1,8 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import Callback from './pages/Callback';
 import Dashboard from './pages/Dashboard';
-import { hasValidSession } from './auth';
-
-function RequireAuth({ children }) {
-  if (!hasValidSession()) {
-    return <Navigate to="/" replace />;
-  }
-  return children;
-}
+import RequireAuth from './RequireAuth';
 
 export default function App() {
   return (

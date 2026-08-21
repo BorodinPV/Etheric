@@ -1,8 +1,4 @@
-<div class="pf-c-tabs">
-    <a class="pf-c-tabs__link {#if activeTab == 'details'}active{/if}" href="/admin/console/users/{userId}/details">{i18n.get('tab.details')}</a>
-    <a class="pf-c-tabs__link {#if activeTab == 'credentials'}active{/if}" href="/admin/console/users/{userId}/credentials">{i18n.get('tab.credentials')}</a>
-    <a class="pf-c-tabs__link {#if activeTab == 'clients'}active{/if}" href="/admin/console/users/{userId}/clients">{i18n.get('tab.clients')}</a>
-</div>
+{#include admin/console/users/tabs /}
 
 {#if success}
 <div class="pf-c-alert pf-m-success">{success}</div>
@@ -14,37 +10,42 @@
 <form method="post" action="/admin/console/users/{userId}/details">
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint">
-            <span>{i18n.get('common.username')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.username') /}
-        </label>
-        <input class="pf-c-form-control" type="text" value="{user.username}" disabled>
-    </div>
+    <div class="ec-card">
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint">
+                <span>{i18n.get('common.username')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.username') /}
+            </label>
+            <input class="pf-c-form-control" type="text" value="{user.username}" disabled>
+        </div>
 
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="email">
-            <span>{i18n.get('common.email')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.email') /}
-        </label>
-        <input class="pf-c-form-control" type="email" id="email" name="email" value="{user.email}">
-    </div>
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint" for="email">
+                <span>{i18n.get('common.email')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.email') /}
+            </label>
+            <input class="pf-c-form-control" type="email" id="email" name="email" value="{user.email}">
+        </div>
 
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="roles">
-            <span>{i18n.get('common.roles')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.roles') /}
-        </label>
-        <input class="pf-c-form-control" type="text" id="roles" name="roles" value="{#for r in user.roles}{r} {/for}">
-    </div>
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint" for="roles">
+                <span>{i18n.get('common.roles')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.roles') /}
+            </label>
+            <input class="pf-c-form-control" type="text" id="roles" name="roles" value="{#for r in user.roles}{r} {/for}">
+            <p class="pf-c-form__helper">{i18n.get('common.helper.spaceCommaSeparated')}</p>
+        </div>
 
-    <div class="pf-c-form__group pf-c-checkbox">
-        <label class="pf-c-form__label--with-hint">
-            <input type="checkbox" name="enabled" {#if user.enabled}checked{/if}>
-            <span>{i18n.get('common.enabled')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.enabled') /}
-        </label>
-    </div>
+        <div class="pf-c-form__group pf-c-checkbox">
+            <label class="pf-c-form__label--with-hint">
+                <input type="checkbox" name="enabled" {#if user.enabled}checked{/if}>
+                <span>{i18n.get('common.enabled')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.enabled') /}
+            </label>
+        </div>
 
-    <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.save')}</button>
+        <div class="ec-form-actions">
+            <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.save')}</button>
+        </div>
+    </div>
 </form>

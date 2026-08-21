@@ -6,14 +6,19 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.redis.datasource.ReactiveRedisDataSource;
 import io.quarkus.redis.datasource.keys.ReactiveKeyCommands;
+import io.quarkus.redis.datasource.set.ReactiveSetCommands;
+import io.quarkus.redis.datasource.transactions.TransactionResult;
 import io.quarkus.redis.datasource.value.ReactiveValueCommands;
-import io.smallrye.mutiny.Uni;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import java.time.Duration;
+import java.util.List;
+
+import io.smallrye.mutiny.Uni;
 import org.jboss.logging.Logger;
 
-import java.time.Duration;
+import java.util.ArrayList;
 
 /**
  * Redis-backed cache for OAuth artifacts (codes, tokens, sessions).
@@ -34,11 +39,13 @@ public class CacheService {
 
     private ReactiveValueCommands<String, String> values;
     private ReactiveKeyCommands<String> keys;
+    private ReactiveSetCommands<String, String> sets;
 
     @PostConstruct
     void init() {
         values = redis.value(String.class);
         keys = redis.key(String.class);
+        sets = redis.set(String.class);
     }
 
     public Uni<Void> saveAuthorizationCode(String code, AuthorizationCodeData data, long ttlSeconds) {
@@ -54,39 +61,135 @@ public class CacheService {
     }
 
     public Uni<Void> saveAccessToken(String token, AccessTokenData data, long ttlSeconds) {
-        return set("auth:token:access:" + token, data, ttlSeconds);
+        return set(accessTokenKey(token), data, ttlSeconds);
     }
 
     public Uni<AccessTokenData> getAccessToken(String token) {
-        return get("auth:token:access:" + token, AccessTokenData.class);
+        return get(accessTokenKey(token), AccessTokenData.class);
     }
 
     public Uni<Void> deleteAccessToken(String token) {
-        return delete("auth:token:access:" + token);
+        return delete(accessTokenKey(token));
     }
 
     public Uni<Void> saveRefreshToken(String token, RefreshTokenData data, long ttlSeconds) {
-        return set("auth:token:refresh:" + token, data, ttlSeconds);
+        return set(refreshTokenKey(token), data, ttlSeconds);
     }
 
     public Uni<RefreshTokenData> getRefreshToken(String token) {
-        return get("auth:token:refresh:" + token, RefreshTokenData.class);
+        return get(refreshTokenKey(token), RefreshTokenData.class);
     }
 
     public Uni<Void> deleteRefreshToken(String token) {
-        return delete("auth:token:refresh:" + token);
+        return delete(refreshTokenKey(token));
+    }
+
+    /**
+     * Atomically stores a new access/refresh token pair (authorization_code grant).
+     */
+    public Uni<Void> saveTokenPairAtomically(String accessToken, AccessTokenData accessData, long accessTtlSeconds,
+                                             String refreshToken, RefreshTokenData refreshData,
+                                             long refreshTtlSeconds) {
+        return serializePair(accessToken, accessData, accessTtlSeconds, refreshToken, refreshData, refreshTtlSeconds)
+                .flatMap(pair -> withRetry(
+                        redis.withTransaction(tx -> {
+                            var txValues = tx.value(String.class);
+                            return txValues.setex(pair.accessKey(), pair.accessTtlSeconds(), pair.accessJson())
+                                    .chain(() -> txValues.setex(
+                                            pair.refreshKey(), pair.refreshTtlSeconds(), pair.refreshJson()));
+                        }),
+                        "saveTokenPairAtomically"))
+                .invoke(this::ensureTransactionExecuted)
+                .replaceWithVoid();
+    }
+
+    /**
+     * Atomically rotates a refresh token: deletes the old refresh entry and stores the new
+     * access/refresh pair in a single Redis transaction guarded by {@code WATCH}.
+     *
+     * @return {@code true} when rotation succeeded; {@code false} when the old refresh token
+     *         was already consumed or modified concurrently
+     */
+    public Uni<Boolean> rotateRefreshTokenAtomically(String oldRefreshToken,
+                                                     String newAccessToken, AccessTokenData accessData,
+                                                     long accessTtlSeconds,
+                                                     String newRefreshToken, RefreshTokenData refreshData,
+                                                     long refreshTtlSeconds) {
+        String oldRefreshKey = refreshTokenKey(oldRefreshToken);
+        return serializePair(newAccessToken, accessData, accessTtlSeconds, newRefreshToken, refreshData,
+                refreshTtlSeconds)
+                .flatMap(pair -> withRetry(
+                        redis.withTransaction(
+                                ds -> ds.value(String.class).get(oldRefreshKey),
+                                (existingJson, tx) -> {
+                                    if (existingJson == null) {
+                                        return tx.discard();
+                                    }
+                                    var txValues = tx.value(String.class);
+                                    return txValues.getdel(oldRefreshKey)
+                                            .chain(() -> txValues.setex(
+                                                    pair.accessKey(), pair.accessTtlSeconds(), pair.accessJson()))
+                                            .chain(() -> txValues.setex(
+                                                    pair.refreshKey(), pair.refreshTtlSeconds(), pair.refreshJson()));
+                                },
+                                oldRefreshKey),
+                        "rotateRefreshTokenAtomically"))
+                .map(this::transactionSucceeded);
     }
 
     public Uni<Void> saveSession(String sessionId, SessionData data, long ttlSeconds) {
-        return set("auth:session:" + sessionId, data, ttlSeconds);
+        return set(sessionKey(sessionId), data, ttlSeconds)
+                .flatMap(v -> data.getUserId() != null
+                        ? registerUserSession(data.getUserId(), sessionId, ttlSeconds)
+                        : Uni.createFrom().voidItem());
     }
 
     public Uni<SessionData> getSession(String sessionId) {
-        return get("auth:session:" + sessionId, SessionData.class);
+        return get(sessionKey(sessionId), SessionData.class);
     }
 
     public Uni<Void> deleteSession(String sessionId) {
-        return delete("auth:session:" + sessionId);
+        return getSession(sessionId).flatMap(data ->
+                deleteSessionKey(sessionId).flatMap(v -> {
+                    if (data != null && data.getUserId() != null) {
+                        return unregisterUserSession(data.getUserId(), sessionId);
+                    }
+                    return Uni.createFrom().voidItem();
+                }));
+    }
+
+    public Uni<Void> deleteAllUserSessions(String userId) {
+        return listUserSessionIds(userId).flatMap(sessionIds -> {
+            if (sessionIds.isEmpty()) {
+                return Uni.createFrom().voidItem();
+            }
+            List<Uni<Void>> deletes = sessionIds.stream().map(this::deleteSessionKey).toList();
+            return Uni.join().all(deletes).andCollectFailures()
+                    .replaceWithVoid()
+                    .flatMap(v -> deleteRedisKey(userSessionsKey(userId)));
+        });
+    }
+
+    public Uni<Void> deleteUserSessionsForClient(String userId, String clientId) {
+        if (clientId == null || clientId.isBlank()) {
+            return deleteAllUserSessions(userId);
+        }
+        return listUserSessionIds(userId).flatMap(sessionIds -> {
+            if (sessionIds.isEmpty()) {
+                return Uni.createFrom().voidItem();
+            }
+            List<Uni<Void>> deletes = new ArrayList<>();
+            for (String sessionId : sessionIds) {
+                deletes.add(getSession(sessionId).flatMap(data -> {
+                    if (data != null && clientId.equals(data.getClientId())) {
+                        return deleteSessionKey(sessionId)
+                                .flatMap(v -> unregisterUserSession(userId, sessionId));
+                    }
+                    return Uni.createFrom().voidItem();
+                }));
+            }
+            return Uni.join().all(deletes).andCollectFailures().replaceWithVoid();
+        });
     }
 
     public Uni<Void> saveAdminSession(String sessionId, AdminSessionData data, long ttlSeconds) {
@@ -177,6 +280,79 @@ public class CacheService {
                 return Uni.createFrom().failure(new IllegalStateException("Failed to deserialize cache value", e));
             }
         });
+    }
+
+    private Uni<Void> deleteSessionKey(String sessionId) {
+        return delete(sessionKey(sessionId));
+    }
+
+    private static String accessTokenKey(String token) {
+        return "auth:token:access:" + token;
+    }
+
+    private static String refreshTokenKey(String token) {
+        return "auth:token:refresh:" + token;
+    }
+
+    private static String sessionKey(String sessionId) {
+        return "auth:session:" + sessionId;
+    }
+
+    private record SerializedTokenPair(
+            String accessKey, String accessJson, long accessTtlSeconds,
+            String refreshKey, String refreshJson, long refreshTtlSeconds) {
+    }
+
+    private Uni<SerializedTokenPair> serializePair(String accessToken, AccessTokenData accessData,
+                                                   long accessTtlSeconds,
+                                                   String refreshToken, RefreshTokenData refreshData,
+                                                   long refreshTtlSeconds) {
+        try {
+            return Uni.createFrom().item(new SerializedTokenPair(
+                    accessTokenKey(accessToken),
+                    objectMapper.writeValueAsString(accessData),
+                    accessTtlSeconds,
+                    refreshTokenKey(refreshToken),
+                    objectMapper.writeValueAsString(refreshData),
+                    refreshTtlSeconds));
+        } catch (JsonProcessingException e) {
+            return Uni.createFrom().failure(new IllegalStateException("Failed to serialize cache value", e));
+        }
+    }
+
+    private boolean transactionSucceeded(TransactionResult result) {
+        return result != null && !result.discarded() && !result.isEmpty();
+    }
+
+    private void ensureTransactionExecuted(TransactionResult result) {
+        if (result == null || result.discarded() || result.isEmpty()) {
+            throw new IllegalStateException("Redis transaction did not execute");
+        }
+    }
+
+    private Uni<Void> registerUserSession(String userId, String sessionId, long ttlSeconds) {
+        String key = userSessionsKey(userId);
+        return withRetry(sets.sadd(key, sessionId), "userSession.sadd")
+                .flatMap(v -> withRetry(keys.expire(key, Duration.ofSeconds(ttlSeconds)), "userSession.expire"))
+                .replaceWithVoid();
+    }
+
+    private Uni<Void> unregisterUserSession(String userId, String sessionId) {
+        return withRetry(sets.srem(userSessionsKey(userId), sessionId), "userSession.srem").replaceWithVoid();
+    }
+
+    private Uni<List<String>> listUserSessionIds(String userId) {
+        return withRetry(sets.smembers(userSessionsKey(userId)), "userSession.smembers")
+                .map(members -> members == null ? List.of() : List.copyOf(members));
+    }
+
+    private static String userSessionsKey(String userId) {
+        return "auth:user:" + userId + ":sessions";
+    }
+
+    private Uni<Void> deleteRedisKey(String key) {
+        LOG.debugf("Deleted cache key: %s", SecretMasker.maskCacheKey(key));
+        return withRetry(keys.del(key), "deleteKey:" + key).replaceWithVoid();
     }
 
     private Uni<Void> delete(String key) {

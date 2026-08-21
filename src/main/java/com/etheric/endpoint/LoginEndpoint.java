@@ -1,5 +1,6 @@
 package com.etheric.endpoint;
 
+import com.etheric.logging.SecurityAuditLogger;
 import com.etheric.model.ClientOAuthPolicy;
 import com.etheric.model.SessionData;
 import com.etheric.repository.UserRepository;
@@ -35,6 +36,9 @@ public class LoginEndpoint {
 
     @Inject
     AuthSessionService authSessionService;
+
+    @Inject
+    SecurityAuditLogger securityAuditLogger;
 
     @GET
     @Produces(MediaType.TEXT_HTML)
@@ -84,10 +88,14 @@ public class LoginEndpoint {
                             .entity("Invalid CSRF token").build());
                 }
                 return userRepository.authenticate(username, password).flatMap(userOpt -> {
+                    String ip = SecurityAuditLogger.resolveClientIp(headers);
                     if (userOpt.isEmpty()) {
+                        securityAuditLogger.loginFailed(username, ip);
                         return renderLoginError(sessionId, session, state, policy);
                     }
-                    return authSessionService.completeLogin(userOpt.get().id.toString(), state, policy);
+                    String userId = userOpt.get().id.toString();
+                    securityAuditLogger.loginSuccess(userId, ip);
+                    return authSessionService.completeLogin(userId, state, policy);
                 });
             });
         });

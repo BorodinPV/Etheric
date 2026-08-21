@@ -7,6 +7,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.HttpHeaders;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -56,6 +57,21 @@ public class SessionCookieFactory {
         return extractSessionIdFromCookie(headers.getHeaderString("Cookie"), policy);
     }
 
+    public Uni<List<String>> extractAllSessionIds(HttpHeaders headers) {
+        return tokenPolicyService.knownOAuthPolicies().map(policies -> {
+            String cookieHeader = headers.getHeaderString("Cookie");
+            List<String> sessionIds = new ArrayList<>();
+            for (ClientOAuthPolicy policy : policies) {
+                String sessionId = extractSessionIdFromCookie(cookieHeader, policy);
+                if (sessionId != null) {
+                    sessionIds.add(sessionId);
+                }
+            }
+            return List.copyOf(sessionIds);
+        });
+    }
+
+    /** Returns the first session id found among all known OAuth session cookies. */
     public Uni<String> extractSessionIdAny(HttpHeaders headers) {
         return tokenPolicyService.knownOAuthPolicies().map(policies -> {
             String cookieHeader = headers.getHeaderString("Cookie");

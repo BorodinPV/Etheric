@@ -1,6 +1,7 @@
 package com.etheric.util;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 public final class ScopeUtil {
@@ -23,6 +24,17 @@ public final class ScopeUtil {
                     com.etheric.exception.OAuthError.INVALID_SCOPE, null, null);
         }
         return new ArrayList<>(requested);
+    }
+
+    public static List<String> mergeScopes(List<String> existing, List<String> incoming) {
+        LinkedHashSet<String> merged = new LinkedHashSet<>();
+        if (existing != null) {
+            merged.addAll(existing);
+        }
+        if (incoming != null) {
+            merged.addAll(incoming);
+        }
+        return new ArrayList<>(merged);
     }
 
     public static boolean coversScopes(List<String> granted, List<String> requested) {

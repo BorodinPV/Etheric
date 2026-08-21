@@ -44,9 +44,9 @@ class PkceUtilTest {
     }
 
     @Test
-    void verify_plain_validVerifier() {
+    void verify_plain_rejected() {
         String verifier = "plain-verifier-value";
-        assertTrue(PkceUtil.verify(verifier, verifier, PkceUtil.METHOD_PLAIN));
+        assertFalse(PkceUtil.verify(verifier, verifier, "plain"));
     }
 
     @Test
@@ -58,7 +58,7 @@ class PkceUtilTest {
     @Test
     void isSupportedMethod() {
         assertTrue(PkceUtil.isSupportedMethod(PkceUtil.METHOD_S256));
-        assertTrue(PkceUtil.isSupportedMethod(PkceUtil.METHOD_PLAIN));
+        assertFalse(PkceUtil.isSupportedMethod("plain"));
         assertFalse(PkceUtil.isSupportedMethod("unknown"));
         assertFalse(PkceUtil.isSupportedMethod(null));
     }

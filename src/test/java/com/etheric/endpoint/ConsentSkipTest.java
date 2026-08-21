@@ -1,9 +1,10 @@
 package com.etheric.endpoint;
 
 import com.etheric.model.AuthorizationRequestState;
-import com.etheric.model.ConsentData;
 import com.etheric.model.SessionData;
+import com.etheric.repository.ConsentRepository;
 import com.etheric.service.CacheService;
+import com.etheric.service.ConsentService;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.Cookie;
 import jakarta.inject.Inject;
@@ -24,14 +25,24 @@ class ConsentSkipTest {
     private static final String TEST_USER_ID = "b0000000-0000-0000-0000-000000000001";
 
     @Inject
+    ConsentService consentService;
+
+    @Inject
+    ConsentRepository consentRepository;
+
+    @Inject
     CacheService cacheService;
+
+    private void clearConsent() {
+        awaitVoid(() -> consentRepository.delete(UUID.fromString(TEST_USER_ID), CLIENT_ID));
+        awaitVoid(cacheService.deleteConsent(TEST_USER_ID, CLIENT_ID));
+    }
 
     @Test
     void authorize_withExistingConsent_skipsConsentPage() {
         String sessionId = UUID.randomUUID().toString();
         awaitVoid(cacheService.saveSession(sessionId, new SessionData(TEST_USER_ID, null, System.currentTimeMillis()), 1800));
-        awaitVoid(cacheService.saveConsent(TEST_USER_ID, CLIENT_ID,
-                new ConsentData(List.of("openid", "profile", "email"), System.currentTimeMillis()), 86400));
+        awaitVoid(() -> consentService.saveConsent(TEST_USER_ID, CLIENT_ID, List.of("openid", "profile", "email")));
 
         String state = UUID.randomUUID().toString();
 
@@ -59,7 +70,7 @@ class ConsentSkipTest {
     void authorize_withoutConsent_redirectsToConsent() {
         String sessionId = UUID.randomUUID().toString();
         awaitVoid(cacheService.saveSession(sessionId, new SessionData(TEST_USER_ID, null, System.currentTimeMillis()), 1800));
-        awaitVoid(cacheService.deleteConsent(TEST_USER_ID, CLIENT_ID));
+        clearConsent();
 
         String state = UUID.randomUUID().toString();
 
@@ -89,8 +100,7 @@ class ConsentSkipTest {
         awaitVoid(cacheService.saveAuthorizationRequestState(state, new AuthorizationRequestState(
             CLIENT_ID, REDIRECT_URI, List.of("openid"), state, null, null, null, null
         ), 600));
-        awaitVoid(cacheService.saveConsent(TEST_USER_ID, CLIENT_ID,
-                new ConsentData(List.of("openid", "profile", "email"), System.currentTimeMillis()), 86400));
+        awaitVoid(() -> consentService.saveConsent(TEST_USER_ID, CLIENT_ID, List.of("openid", "profile", "email")));
 
         given()
             .contentType("application/x-www-form-urlencoded")

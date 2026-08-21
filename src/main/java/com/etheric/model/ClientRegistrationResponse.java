@@ -38,17 +38,17 @@ public class ClientRegistrationResponse {
     private String clientDescription;
 
     @JsonProperty("access_token_lifetime_seconds")
-    private Integer accessTokenLifetimeSeconds;
+    private int accessTokenLifetimeSeconds;
 
     @JsonProperty("refresh_token_lifetime_seconds")
-    private Integer refreshTokenLifetimeSeconds;
+    private int refreshTokenLifetimeSeconds;
 
     @JsonProperty("session_lifetime_seconds")
-    private Integer sessionLifetimeSeconds;
+    private int sessionLifetimeSeconds;
 
     @JsonProperty("session_cookie_name")
     private String sessionCookieName;
 
     @JsonProperty("session_cookie_secure")
-    private Boolean sessionCookieSecure;
+    private boolean sessionCookieSecure;
 }

@@ -12,8 +12,7 @@ import java.util.Set;
 public final class PkceUtil {
 
     public static final String METHOD_S256 = "S256";
-    public static final String METHOD_PLAIN = "plain";
-    private static final Set<String> SUPPORTED_METHODS = Set.of(METHOD_S256, METHOD_PLAIN);
+    private static final Set<String> SUPPORTED_METHODS = Set.of(METHOD_S256);
 
     private PkceUtil() {
     }
@@ -45,12 +44,9 @@ public final class PkceUtil {
         String method = (codeChallengeMethod == null || codeChallengeMethod.isBlank())
                 ? METHOD_S256
                 : codeChallengeMethod;
-        if (METHOD_S256.equals(method)) {
-            return codeChallenge.equals(s256Challenge(codeVerifier));
+        if (!METHOD_S256.equals(method)) {
+            return false;
         }
-        if (METHOD_PLAIN.equals(method)) {
-            return codeChallenge.equals(codeVerifier);
-        }
-        return false;
+        return codeChallenge.equals(s256Challenge(codeVerifier));
     }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { handleCallback } from '../auth';
+import { handleCallback, mapOAuthError } from '../auth';
 
 export default function Callback() {
   const [searchParams] = useSearchParams();
@@ -25,7 +25,10 @@ export default function Callback() {
 
     handleCallback(searchParams)
       .then(() => navigate('/dashboard', { replace: true }))
-      .catch((err) => setError(err.message));
+      .catch((err) => {
+        const code = searchParams.get('error');
+        setError(code ? mapOAuthError(code, searchParams.get('error_description')) : err.message);
+      });
   }, [searchParams, navigate]);
 
   if (error) {

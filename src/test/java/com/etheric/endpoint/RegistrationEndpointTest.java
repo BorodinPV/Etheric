@@ -1,6 +1,7 @@
 package com.etheric.endpoint;
 
 import com.etheric.model.AuthorizationRequestState;
+import com.etheric.repository.ConsentRepository;
 import com.etheric.repository.UserRepository;
 import com.etheric.service.CacheService;
 import com.etheric.service.UserClientMembershipService;
@@ -35,6 +36,14 @@ class RegistrationEndpointTest {
 
     @Inject
     UserClientMembershipService membershipService;
+
+    @Inject
+    ConsentRepository consentRepository;
+
+    private void clearConsent(String userId, String clientId) {
+        awaitVoid(() -> consentRepository.delete(UUID.fromString(userId), clientId));
+        awaitVoid(cacheService.deleteConsent(userId, clientId));
+    }
 
     @Test
     void getRegister_rendersFormWithCsrf() {
@@ -118,7 +127,7 @@ class RegistrationEndpointTest {
     void postRegister_withOAuthState_redirectsToConsent() {
         String username = "reg-oauth-" + UUID.randomUUID().toString().substring(0, 8);
         String state = "register-oauth-state-" + UUID.randomUUID();
-        awaitVoid(cacheService.deleteConsent("b0000000-0000-0000-0000-000000000001", "test-client"));
+        clearConsent("b0000000-0000-0000-0000-000000000001", "test-client");
         awaitVoid(cacheService.saveAuthorizationRequestState(state, new AuthorizationRequestState(
             "test-client", "http://localhost:8080/callback", List.of("openid"), state, null, null, null, null
         ), 600));

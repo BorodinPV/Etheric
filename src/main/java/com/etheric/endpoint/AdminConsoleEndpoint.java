@@ -85,14 +85,10 @@ public class AdminConsoleEndpoint {
     AdminUserService adminUserService;
 
     @Inject
-    AdminServerSettingsService adminServerSettingsService;
-
-    @Inject
     UserClientMembershipService membershipService;
 
     @Inject
-    @Location("admin/console/server-settings")
-    Template adminConsoleServerSettings;
+    TokenPolicyService tokenPolicyService;
 
     @Inject
     AdminSessionCookieFactory cookieFactory;
@@ -208,10 +204,12 @@ public class AdminConsoleEndpoint {
     public Uni<Response> createClientForm(@Context ContainerRequestContext requestContext) {
         AdminSessionData session = session(requestContext);
         AdminConsoleI18n i18n = i18n(requestContext);
+        Map<String, Object> data = contentData("error", null);
+        data.put("defaults", tokenPolicyService.defaultOAuthPolicy());
         return Uni.createFrom().item(renderLayout(session, i18n, "clients", i18n.get("page.createClient"),
                 List.of(breadcrumb(i18n.get("page.clients"), "/admin/console/clients"),
                         breadcrumb(i18n.get("page.createClient"), null)),
-                adminConsoleClientsCreate, contentData("error", null)));
+                adminConsoleClientsCreate, data));
     }
 
     @POST
@@ -226,6 +224,11 @@ public class AdminConsoleEndpoint {
             @FormParam("scopes") String scopes,
             @FormParam("grant_types") String grantTypes,
             @FormParam("client_description") String clientDescription,
+            @FormParam("access_token_lifetime_seconds") String accessTokenLifetime,
+            @FormParam("refresh_token_lifetime_seconds") String refreshTokenLifetime,
+            @FormParam("session_lifetime_seconds") String sessionLifetimeSeconds,
+            @FormParam("session_cookie_name") String sessionCookieName,
+            @FormParam("session_cookie_secure") String sessionCookieSecure,
             @Context ContainerRequestContext requestContext) {
 
         AdminSessionData session = session(requestContext);
@@ -242,14 +245,20 @@ public class AdminConsoleEndpoint {
         request.setScopes(splitCsv(scopes));
         request.setGrantTypes(splitCsv(grantTypes));
         request.setClientDescription(blankToNull(clientDescription));
+        request.setAccessTokenLifetimeSeconds(parseRequiredPositiveInt(accessTokenLifetime));
+        request.setRefreshTokenLifetimeSeconds(parseRequiredPositiveInt(refreshTokenLifetime));
+        request.setSessionLifetimeSeconds(parseRequiredPositiveInt(sessionLifetimeSeconds));
+        request.setSessionCookieName(blankToNull(sessionCookieName));
+        request.setSessionCookieSecure("on".equals(sessionCookieSecure));
 
         return adminClientService.register(request).flatMap(result -> {
             if (!result.isSuccess()) {
+                Map<String, Object> data = contentData("error", errorMessage(result, i18n));
+                data.put("defaults", tokenPolicyService.defaultOAuthPolicy());
                 return Uni.createFrom().item(renderLayout(session, i18n, "clients", i18n.get("page.createClient"),
                         List.of(breadcrumb(i18n.get("page.clients"), "/admin/console/clients"),
                                 breadcrumb(i18n.get("page.createClient"), null)),
-                        adminConsoleClientsCreate,
-                        contentData("error", errorMessage(result, i18n))));
+                        adminConsoleClientsCreate, data));
             }
             ClientRegistrationResponse created = result.value();
             AdminFlashData flash = new AdminFlashData("client_secret",
@@ -318,11 +327,11 @@ public class AdminConsoleEndpoint {
         request.setGrantTypes(splitCsv(grantTypes));
         request.setEnabled("on".equals(enabled));
         request.setClientDescription(clientDescription);
-
-        Integer accessLifetime = parseOptionalPositiveInt(accessTokenLifetime);
-        Integer refreshLifetime = parseOptionalPositiveInt(refreshTokenLifetime);
-        Integer sessionLifetime = parseOptionalPositiveInt(sessionLifetimeSeconds);
-        Boolean cookieSecure = parseOptionalSecureFlag(sessionCookieSecure);
+        request.setAccessTokenLifetimeSeconds(parseRequiredPositiveInt(accessTokenLifetime));
+        request.setRefreshTokenLifetimeSeconds(parseRequiredPositiveInt(refreshTokenLifetime));
+        request.setSessionLifetimeSeconds(parseRequiredPositiveInt(sessionLifetimeSeconds));
+        request.setSessionCookieName(blankToNull(sessionCookieName));
+        request.setSessionCookieSecure("on".equals(sessionCookieSecure));
 
         return adminClientService.update(clientId, request).flatMap(result -> {
             if (!result.isSuccess()) {
@@ -331,72 +340,8 @@ public class AdminConsoleEndpoint {
                                 clientResult.isSuccess() ? clientResult.value() : null,
                                 null, errorMessage(result, i18n), null));
             }
-            return adminClientService.updateOAuthSettings(clientId, accessLifetime, refreshLifetime, sessionLifetime,
-                            blankToNull(sessionCookieName), cookieSecure)
-                    .map(lifetimeResult -> {
-                        if (!lifetimeResult.isSuccess()) {
-                            return renderClientDetail(session, i18n, clientId, "settings", lifetimeResult.value(),
-                                    null, errorMessage(lifetimeResult, i18n), null);
-                        }
-                        return renderClientDetail(session, i18n, clientId, "settings", lifetimeResult.value(),
-                                null, null, i18n.get("success.clientUpdated"));
-                    });
-        });
-    }
-
-    @GET
-    @Path("/settings")
-    @Produces(MediaType.TEXT_HTML)
-    public Uni<Response> serverSettings(@Context ContainerRequestContext requestContext) {
-        AdminSessionData session = session(requestContext);
-        AdminConsoleI18n i18n = i18n(requestContext);
-        return adminServerSettingsService.get().map(result -> {
-            if (!result.isSuccess()) {
-                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                        .entity(i18n.get("error.loadServerSettings")).build();
-            }
-            Map<String, Object> data = new HashMap<>();
-            data.put("settings", result.value());
-            data.put("success", null);
-            data.put("error", null);
-            return renderLayout(session, i18n, "settings", i18n.get("page.serverSettings"),
-                    List.of(), adminConsoleServerSettings, data);
-        });
-    }
-
-    @POST
-    @Path("/settings")
-    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-    @Produces(MediaType.TEXT_HTML)
-    public Uni<Response> updateServerSettings(
-            @FormParam("csrf_token") String csrfToken,
-            @FormParam("oauth_session_cookie_name") String oauthSessionCookieName,
-            @FormParam("oauth_session_lifetime_seconds") int oauthSessionLifetimeSeconds,
-            @FormParam("default_access_token_lifetime_seconds") int defaultAccessTokenLifetimeSeconds,
-            @FormParam("default_refresh_token_lifetime_seconds") int defaultRefreshTokenLifetimeSeconds,
-            @FormParam("session_cookie_secure") String sessionCookieSecure,
-            @Context ContainerRequestContext requestContext) {
-
-        AdminSessionData session = session(requestContext);
-        AdminConsoleI18n i18n = i18n(requestContext);
-        if (!authService.validateCsrf(session, csrfToken)) {
-            return Uni.createFrom().item(forbiddenCsrf(i18n));
-        }
-
-        ServerSettingsView view = new ServerSettingsView(
-                oauthSessionCookieName,
-                oauthSessionLifetimeSeconds,
-                defaultAccessTokenLifetimeSeconds,
-                defaultRefreshTokenLifetimeSeconds,
-                "on".equals(sessionCookieSecure));
-
-        return adminServerSettingsService.update(view).map(result -> {
-            Map<String, Object> data = new HashMap<>();
-            data.put("settings", result.isSuccess() ? result.value() : view);
-            data.put("error", result.isSuccess() ? null : errorMessage(result, i18n));
-            data.put("success", result.isSuccess() ? i18n.get("success.serverSettingsUpdated") : null);
-            return renderLayout(session, i18n, "settings", i18n.get("page.serverSettings"),
-                    List.of(), adminConsoleServerSettings, data);
+            return Uni.createFrom().item(renderClientDetail(session, i18n, clientId, "settings", result.value(),
+                    null, null, i18n.get("success.clientUpdated")));
         });
     }
 
@@ -907,18 +852,11 @@ public class AdminConsoleEndpoint {
                 .collect(Collectors.toList());
     }
 
-    private static Integer parseOptionalPositiveInt(String value) {
+    private static Integer parseRequiredPositiveInt(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         return Integer.parseInt(value.trim());
-    }
-
-    private static Boolean parseOptionalSecureFlag(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return "true".equals(value);
     }
 
     private static List<UUID> parseUserIds(List<String> userIds) {

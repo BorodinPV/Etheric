@@ -5,46 +5,52 @@
 <form method="post" action="/admin/console/users/create">
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="username">
-            <span>{i18n.get('common.username')} *</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.username') /}
-        </label>
-        <input class="pf-c-form-control" type="text" id="username" name="username" required>
-    </div>
+    <div class="ec-card">
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint" for="username">
+                <span>{i18n.get('common.username')} *</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.username') /}
+            </label>
+            <input class="pf-c-form-control" type="text" id="username" name="username" required>
+        </div>
 
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="password">
-            <span>{i18n.get('common.password')} *</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.password') /}
-        </label>
-        <input class="pf-c-form-control" type="password" id="password" name="password" required minlength="8">
-    </div>
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint" for="password">
+                <span>{i18n.get('common.password')} *</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.password') /}
+            </label>
+            <input class="pf-c-form-control" type="password" id="password" name="password" required minlength="8">
+            <p class="pf-c-form__helper">{i18n.get('common.helper.minPassword')}</p>
+        </div>
 
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="email">
-            <span>{i18n.get('common.email')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.email') /}
-        </label>
-        <input class="pf-c-form-control" type="email" id="email" name="email">
-    </div>
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint" for="email">
+                <span>{i18n.get('common.email')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.email') /}
+            </label>
+            <input class="pf-c-form-control" type="email" id="email" name="email">
+        </div>
 
-    <div class="pf-c-form__group">
-        <label class="pf-c-form__label pf-c-form__label--with-hint" for="roles">
-            <span>{i18n.get('common.roles')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.roles') /}
-        </label>
-        <input class="pf-c-form-control" type="text" id="roles" name="roles" value="user">
-    </div>
+        <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint" for="roles">
+                <span>{i18n.get('common.roles')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.roles') /}
+            </label>
+            <input class="pf-c-form-control" type="text" id="roles" name="roles" value="user">
+            <p class="pf-c-form__helper">{i18n.get('common.helper.spaceCommaSeparated')}</p>
+        </div>
 
-    <div class="pf-c-form__group pf-c-checkbox">
-        <label class="pf-c-form__label--with-hint">
-            <input type="checkbox" name="enabled" checked>
-            <span>{i18n.get('common.enabled')}</span>
-            {#include admin/console/field-hint text=i18n.get('hint.common.enabled') /}
-        </label>
-    </div>
+        <div class="pf-c-form__group pf-c-checkbox">
+            <label class="pf-c-form__label--with-hint">
+                <input type="checkbox" name="enabled" checked>
+                <span>{i18n.get('common.enabled')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.common.enabled') /}
+            </label>
+        </div>
 
-    <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.create')}</button>
-    <a class="pf-c-button pf-m-secondary" href="/admin/console/users" style="margin-left:8px">{i18n.get('common.cancel')}</a>
+        <div class="ec-form-actions">
+            <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.create')}</button>
+            <a class="pf-c-button pf-m-secondary" href="/admin/console/users">{i18n.get('common.cancel')}</a>
+        </div>
+    </div>
 </form>

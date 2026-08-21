@@ -58,6 +58,37 @@ class CacheServiceTest {
     }
 
     @Test
+    void rotateRefreshTokenAtomically_replacesOldRefreshToken() {
+        String oldRefresh = "old-refresh-" + System.nanoTime();
+        String newAccess = "new-access-" + System.nanoTime();
+        String newRefresh = "new-refresh-" + System.nanoTime();
+        awaitVoid(cacheService.saveRefreshToken(oldRefresh, new RefreshTokenData(
+                "user1", "test-client", List.of("openid")), 604800));
+
+        boolean rotated = await(cacheService.rotateRefreshTokenAtomically(
+                oldRefresh,
+                newAccess, new AccessTokenData("user1", "test-client", List.of("openid"), 999L), 3600,
+                newRefresh, new RefreshTokenData("user1", "test-client", List.of("openid")), 604800));
+
+        assertTrue(rotated);
+        assertNull(await(cacheService.getRefreshToken(oldRefresh)));
+        assertNotNull(await(cacheService.getRefreshToken(newRefresh)));
+        assertNotNull(await(cacheService.getAccessToken(newAccess)));
+    }
+
+    @Test
+    void rotateRefreshTokenAtomically_missingOldToken_returnsFalse() {
+        boolean rotated = await(cacheService.rotateRefreshTokenAtomically(
+                "missing-refresh-" + System.nanoTime(),
+                "access-" + System.nanoTime(),
+                new AccessTokenData("user1", "test-client", List.of("openid"), 999L), 3600,
+                "refresh-" + System.nanoTime(),
+                new RefreshTokenData("user1", "test-client", List.of("openid")), 604800));
+
+        assertFalse(rotated);
+    }
+
+    @Test
     void session_saveAndRetrieve() {
         String sessionId = "session-" + System.nanoTime();
         SessionData data = new SessionData("user1", "csrf", 1000L);
@@ -65,6 +96,20 @@ class CacheServiceTest {
         SessionData retrieved = await(cacheService.getSession(sessionId));
         assertNotNull(retrieved);
         assertEquals("user1", retrieved.getUserId());
+    }
+
+    @Test
+    void session_deleteAllUserSessions() {
+        String sessionId1 = "session-a-" + System.nanoTime();
+        String sessionId2 = "session-b-" + System.nanoTime();
+        SessionData data = new SessionData("user1", "csrf", 1000L);
+        awaitVoid(cacheService.saveSession(sessionId1, data, 1800));
+        awaitVoid(cacheService.saveSession(sessionId2, data, 1800));
+
+        awaitVoid(cacheService.deleteAllUserSessions("user1"));
+
+        assertNull(await(cacheService.getSession(sessionId1)));
+        assertNull(await(cacheService.getSession(sessionId2)));
     }
 
     @Test

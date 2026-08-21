@@ -1,7 +1,7 @@
 package com.etheric.endpoint;
 
 import com.etheric.repository.ClientRepository;
-import com.etheric.service.CacheService;
+import com.etheric.service.AuthSessionService;
 import com.etheric.util.SessionCookieFactory;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
@@ -17,13 +17,15 @@ import java.util.List;
  * Session logout ({@code GET /logout}).
  * <p>
  * Optional {@code redirect_uri} query param (must be a registered client redirect URI).
- * Clears the OAuth session cookie and {@code 302} to target URI or {@code /}.
+ * Optional {@code client_id} limits logout to OAuth sessions for that client; otherwise all
+ * AS sessions for the authenticated user(s) found in cookies are removed.
+ * Clears all known OAuth session cookies and {@code 302} to target URI or {@code /}.
  */
 @Path("/logout")
 public class LogoutEndpoint {
 
     @Inject
-    CacheService cacheService;
+    AuthSessionService authSessionService;
 
     @Inject
     SessionCookieFactory sessionCookieFactory;
@@ -32,15 +34,13 @@ public class LogoutEndpoint {
     ClientRepository clientRepository;
 
     @GET
-    public Uni<Response> logout(@QueryParam("redirect_uri") String redirectUri, @Context HttpHeaders headers) {
-        return sessionCookieFactory.extractSessionIdAny(headers).flatMap(sessionId -> {
-            Uni<Void> deleteSession = sessionId != null
-                    ? cacheService.deleteSession(sessionId)
-                    : Uni.createFrom().voidItem();
-            return deleteSession.flatMap(v -> resolveRedirectTarget(redirectUri))
-                    .flatMap(target -> sessionCookieFactory.clearAllKnown()
-                            .map(clearCookies -> buildLogoutResponse(target, clearCookies)));
-        });
+    public Uni<Response> logout(@QueryParam("redirect_uri") String redirectUri,
+                                @QueryParam("client_id") String clientId,
+                                @Context HttpHeaders headers) {
+        return authSessionService.logout(headers, clientId)
+                .flatMap(v -> resolveRedirectTarget(redirectUri))
+                .flatMap(target -> sessionCookieFactory.clearAllKnown()
+                        .map(clearCookies -> buildLogoutResponse(target, clearCookies)));
     }
 
     private Response buildLogoutResponse(URI target, List<String> clearCookies) {

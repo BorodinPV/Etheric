@@ -1,9 +1,8 @@
 package com.etheric.bootstrap;
 
 import com.etheric.entity.Client;
-import com.etheric.entity.ServerSettings;
-import com.etheric.repository.ServerSettingsRepository;
 import com.etheric.entity.User;
+import com.etheric.model.ClientOAuthPolicy;
 import com.etheric.repository.ClientRepository;
 import com.etheric.repository.UserRepository;
 import com.etheric.service.AdminConsoleAuthService;
@@ -53,9 +52,6 @@ public class DevSeedService {
     ClientRepository clientRepository;
 
     @Inject
-    ServerSettingsRepository serverSettingsRepository;
-
-    @Inject
     TokenPolicyService tokenPolicyService;
 
     @Inject
@@ -76,8 +72,6 @@ public class DevSeedService {
             VertxContextSupport.subscribeAndAwait(() ->
                     seedIfEmpty()
                             .chain(v -> normalizeDevSeedIfDev())
-                            .chain(v -> ensureDevServerSettings())
-                            .chain(v -> ensureTestServerSettings())
                             .chain(v -> ensureDevClient())
                             .chain(v -> ensureDevUser())
                             .chain(v -> ensureAdminUser())
@@ -127,46 +121,6 @@ public class DevSeedService {
     }
 
     @WithTransaction
-    Uni<Void> ensureDevServerSettings() {
-        if (!"dev".equals(quarkusProfile)) {
-            return Uni.createFrom().voidItem();
-        }
-        return serverSettingsRepository.getSettings().flatMap(settings -> {
-            if (settings == null) {
-                return Uni.createFrom().voidItem();
-            }
-            if (!settings.sessionCookieSecure) {
-                return Uni.createFrom().voidItem();
-            }
-            settings.sessionCookieSecure = false;
-            settings.updatedAt = OffsetDateTime.now();
-            LOG.info("Applying dev profile: session_cookie_secure=false in server_settings");
-            return serverSettingsRepository.updateSettings(settings)
-                    .flatMap(v -> tokenPolicyService.refreshCache());
-        });
-    }
-
-    @WithTransaction
-    Uni<Void> ensureTestServerSettings() {
-        if (!"test".equals(quarkusProfile)) {
-            return Uni.createFrom().voidItem();
-        }
-        return serverSettingsRepository.getSettings().flatMap(settings -> {
-            if (settings == null) {
-                return Uni.createFrom().voidItem();
-            }
-            if (settings.sessionCookieSecure) {
-                return Uni.createFrom().voidItem();
-            }
-            settings.sessionCookieSecure = true;
-            settings.updatedAt = OffsetDateTime.now();
-            LOG.info("Applying test profile: session_cookie_secure=true in server_settings");
-            return serverSettingsRepository.updateSettings(settings)
-                    .flatMap(v -> tokenPolicyService.refreshCache());
-        });
-    }
-
-    @WithTransaction
     Uni<Void> ensureDevClient() {
         return clientRepository.findByClientId(DEV_CLIENT_ID).flatMap(existing -> {
             if (existing.isEmpty()) {
@@ -191,10 +145,17 @@ public class DevSeedService {
                 client.clientSecretHash = passwordService.hashPassword(DEV_CLIENT_SECRET);
                 changed = true;
             }
+            boolean expectedSecure = !"dev".equals(quarkusProfile);
+            if (client.sessionCookieSecure != expectedSecure) {
+                client.sessionCookieSecure = expectedSecure;
+                changed = true;
+                LOG.infof("Applying %s profile: session_cookie_secure=%s on test-client",
+                        quarkusProfile, expectedSecure);
+            }
             if (!changed) {
                 return Uni.createFrom().voidItem();
             }
-            LOG.info("Updating dev client (test-client) redirect URIs / secret");
+            LOG.info("Updating dev client (test-client) redirect URIs / secret / OAuth settings");
             client.redirectUris = uris;
             return clientRepository.updateClient(client);
         });
@@ -258,6 +219,8 @@ public class DevSeedService {
     }
 
     private Client createDevClient() {
+        ClientOAuthPolicy defaults = tokenPolicyService.defaultOAuthPolicy();
+        boolean secure = !"dev".equals(quarkusProfile);
         return new Client(
                 DEV_CLIENT_UUID,
                 DEV_CLIENT_ID,
@@ -268,7 +231,12 @@ public class DevSeedService {
                 List.of("authorization_code", "refresh_token"),
                 true,
                 OffsetDateTime.now(),
-                "Dev OAuth client (confidential + PKCE for SPA demo)"
+                "Dev OAuth client (confidential + PKCE for SPA demo)",
+                (int) defaults.getAccessTokenLifetimeSeconds(),
+                (int) defaults.getRefreshTokenLifetimeSeconds(),
+                (int) defaults.getSessionLifetimeSeconds(),
+                defaults.getSessionCookieName(),
+                secure
         );
     }
 

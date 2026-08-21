@@ -1,15 +1,25 @@
 <!DOCTYPE html>
-<html lang="{htmlLang}">
+<html lang="{htmlLang}" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark light">
     <title>{i18n.get('login.pageTitle')} - {i18n.get('app.title')}</title>
     <link rel="stylesheet" href="/admin/admin-console.css">
+    <script src="/admin/admin-console.js"></script>
 </head>
 <body>
 <div class="pf-c-login">
     <div class="pf-c-login__card">
-        <div class="pf-c-login__brand"><span>{i18n.get('app.brand')}</span></div>
+        <div class="pf-c-login__brand">
+            <span class="ec-logo" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+                    <path d="m9 12 2 2 4-4"/>
+                </svg>
+            </span>
+            <span>{i18n.get('app.brand')}</span>
+        </div>
         <nav class="pf-c-locale-switcher pf-c-locale-switcher--center" aria-label="Language">
             <a class="pf-c-locale-switcher__link {#if locale == 'en'}active{/if}" href="/admin/console/locale?lang=en">{i18n.get('lang.en')}</a>
             <span class="pf-c-locale-switcher__sep">|</span>
@@ -27,13 +37,13 @@
             {/if}
             <div class="pf-c-form__group">
                 <label class="pf-c-form__label" for="username">{i18n.get('login.username')}</label>
-                <input class="pf-c-form-control" type="text" id="username" name="username" required autofocus>
+                <input class="pf-c-form-control" type="text" id="username" name="username" autocomplete="username" required autofocus>
             </div>
             <div class="pf-c-form__group">
                 <label class="pf-c-form__label" for="password">{i18n.get('login.password')}</label>
-                <input class="pf-c-form-control" type="password" id="password" name="password" required>
+                <input class="pf-c-form-control" type="password" id="password" name="password" autocomplete="current-password" required>
             </div>
-            <button class="pf-c-button pf-m-primary" type="submit" style="width:100%">{i18n.get('login.submit')}</button>
+            <button class="pf-c-button pf-m-primary pf-c-login__submit" type="submit">{i18n.get('login.submit')}</button>
         </form>
     </div>
 </div>
