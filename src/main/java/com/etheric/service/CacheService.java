@@ -14,6 +14,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 
 import io.smallrye.mutiny.Uni;
 import org.jboss.logging.Logger;
@@ -30,12 +31,20 @@ public class CacheService {
     private static final int MAX_RETRIES = 3;
     private static final Duration INITIAL_BACKOFF = Duration.ofMillis(50);
     private static final Duration MAX_BACKOFF = Duration.ofMillis(200);
+    private static final String ADMIN_FLASH_PREFIX = "admin:flash:";
+    private static final String ADMIN_SESSION_PREFIX = "admin:session:";
+    private static final String AUTH_CONSENT_PREFIX = "auth:consent:";
+    private static final String AUTH_REQUEST_PREFIX = "auth:request:";
+    private static final String AUTH_CODE_PREFIX = "auth:code:";
+
+    private final ReactiveRedisDataSource redis;
+    private final ObjectMapper objectMapper;
 
     @Inject
-    ReactiveRedisDataSource redis;
-
-    @Inject
-    ObjectMapper objectMapper;
+    public CacheService(ReactiveRedisDataSource redis, ObjectMapper objectMapper) {
+        this.redis = redis;
+        this.objectMapper = objectMapper;
+    }
 
     private ReactiveValueCommands<String, String> values;
     private ReactiveKeyCommands<String> keys;
@@ -49,15 +58,15 @@ public class CacheService {
     }
 
     public Uni<Void> saveAuthorizationCode(String code, AuthorizationCodeData data, long ttlSeconds) {
-        return set("auth:code:" + code, data, ttlSeconds);
+        return set(AUTH_CODE_PREFIX + code, data, ttlSeconds);
     }
 
     public Uni<AuthorizationCodeData> getAuthorizationCode(String code) {
-        return get("auth:code:" + code, AuthorizationCodeData.class);
+        return get(AUTH_CODE_PREFIX + code, AuthorizationCodeData.class);
     }
 
     public Uni<Void> deleteAuthorizationCode(String code) {
-        return delete("auth:code:" + code);
+        return delete(AUTH_CODE_PREFIX + code);
     }
 
     public Uni<Void> saveAccessToken(String token, AccessTokenData data, long ttlSeconds) {
@@ -193,55 +202,55 @@ public class CacheService {
     }
 
     public Uni<Void> saveAdminSession(String sessionId, AdminSessionData data, long ttlSeconds) {
-        return set("admin:session:" + sessionId, data, ttlSeconds);
+        return set(ADMIN_SESSION_PREFIX + sessionId, data, ttlSeconds);
     }
 
     public Uni<AdminSessionData> getAdminSession(String sessionId) {
-        return get("admin:session:" + sessionId, AdminSessionData.class);
+        return get(ADMIN_SESSION_PREFIX + sessionId, AdminSessionData.class);
     }
 
     public Uni<Void> deleteAdminSession(String sessionId) {
-        return delete("admin:session:" + sessionId);
+        return delete(ADMIN_SESSION_PREFIX + sessionId);
     }
 
     public Uni<Void> saveAdminFlash(String sessionId, AdminFlashData data, long ttlSeconds) {
-        return set("admin:flash:" + sessionId, data, ttlSeconds);
+        return set(ADMIN_FLASH_PREFIX + sessionId, data, ttlSeconds);
     }
 
     public Uni<AdminFlashData> getAdminFlash(String sessionId) {
-        return get("admin:flash:" + sessionId, AdminFlashData.class);
+        return get(ADMIN_FLASH_PREFIX + sessionId, AdminFlashData.class);
     }
 
     public Uni<Void> deleteAdminFlash(String sessionId) {
-        return delete("admin:flash:" + sessionId);
+        return delete(ADMIN_FLASH_PREFIX + sessionId);
     }
 
     public Uni<Void> saveAuthorizationRequestState(String state, AuthorizationRequestState data, long ttlSeconds) {
-        return set("auth:request:" + state, data, ttlSeconds);
+        return set(AUTH_REQUEST_PREFIX + state, data, ttlSeconds);
     }
 
     public Uni<AuthorizationRequestState> getAuthorizationRequestState(String state) {
-        return get("auth:request:" + state, AuthorizationRequestState.class);
+        return get(AUTH_REQUEST_PREFIX + state, AuthorizationRequestState.class);
     }
 
     public Uni<Void> deleteAuthorizationRequestState(String state) {
-        return delete("auth:request:" + state);
+        return delete(AUTH_REQUEST_PREFIX + state);
     }
 
     public Uni<Void> saveConsent(String userId, String clientId, ConsentData data, long ttlSeconds) {
-        return set("auth:consent:" + userId + ":" + clientId, data, ttlSeconds);
+        return set(AUTH_CONSENT_PREFIX + userId + ":" + clientId, data, ttlSeconds);
     }
 
     public Uni<ConsentData> getConsent(String userId, String clientId) {
-        return get("auth:consent:" + userId + ":" + clientId, ConsentData.class);
+        return get(AUTH_CONSENT_PREFIX + userId + ":" + clientId, ConsentData.class);
     }
 
     public Uni<Void> deleteConsent(String userId, String clientId) {
-        return delete("auth:consent:" + userId + ":" + clientId);
+        return delete(AUTH_CONSENT_PREFIX + userId + ":" + clientId);
     }
 
     public Uni<Boolean> exists(String key) {
-        return withRetry(values.get(key).map(value -> value != null), "exists");
+        return withRetry(values.get(key).map(Objects::nonNull), "exists");
     }
 
     public Uni<Boolean> checkRateLimit(String bucket, int maxRequests, long windowSeconds) {

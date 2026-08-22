@@ -8,9 +8,9 @@ import com.etheric.model.UserUpdateRequest;
 import com.etheric.repository.UserRepository;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,23 +19,27 @@ public class AdminUserService {
 
     public static final int MIN_PASSWORD_LENGTH = 8;
     private static final List<String> DEFAULT_ROLES = List.of("user");
+    private static final String ERROR_INVALID_REQUEST = "invalid_request";
+    private static final String ERROR_NOT_FOUND = "not_found";
+    private static final String MSG_USER_NOT_FOUND = "User not found";
 
-    @Inject
-    UserRepository userRepository;
+    private final UserRepository userRepository;
+    private final PasswordService passwordService;
 
-    @Inject
-    PasswordService passwordService;
+    public AdminUserService(UserRepository userRepository, PasswordService passwordService) {
+        this.userRepository = userRepository;
+        this.passwordService = passwordService;
+    }
 
     public Uni<AdminServiceResult<UserResponse>> create(UserCreateRequest request) {
         if (request == null
                 || request.getUsername() == null || request.getUsername().isBlank()
                 || request.getPassword() == null || request.getPassword().isBlank()) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "username and password are required"));
+            return Uni.createFrom().item(invalidRequest("username and password are required"));
         }
         if (request.getPassword().length() < MIN_PASSWORD_LENGTH) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "password must be at least " + MIN_PASSWORD_LENGTH + " characters"));
+            return Uni.createFrom().item(invalidRequest(
+                    "password must be at least " + MIN_PASSWORD_LENGTH + " characters"));
         }
 
         String username = request.getUsername().trim();
@@ -47,7 +51,8 @@ public class AdminUserService {
 
             List<String> roles = (request.getRoles() == null || request.getRoles().isEmpty())
                     ? DEFAULT_ROLES : List.copyOf(request.getRoles());
-            boolean enabled = request.getEnabled() == null || request.getEnabled();
+            Boolean requestedEnabled = request.getEnabled();
+            boolean enabled = requestedEnabled == null || requestedEnabled.booleanValue();
 
             User user = new User(
                     UUID.randomUUID(),
@@ -56,7 +61,7 @@ public class AdminUserService {
                     request.getEmail(),
                     roles,
                     enabled,
-                    OffsetDateTime.now());
+                    OffsetDateTime.now(ZoneOffset.UTC));
 
             return userRepository.persistUser(user)
                     .map(saved -> AdminServiceResult.ok(toResponse(saved)));
@@ -71,36 +76,25 @@ public class AdminUserService {
     public Uni<AdminServiceResult<UserResponse>> get(UUID userId) {
         return userRepository.findUserById(userId)
                 .map(opt -> opt.map(user -> AdminServiceResult.ok(toResponse(user)))
-                        .orElseGet(() -> AdminServiceResult.notFound("not_found", "User not found")));
+                        .orElseGet(() -> userNotFound()));
     }
 
     public Uni<AdminServiceResult<UserResponse>> update(UUID userId, UserUpdateRequest request) {
         if (request == null) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "request body is required"));
+            return Uni.createFrom().item(invalidRequest("request body is required"));
         }
         if (request.getEmail() == null && request.getRoles() == null && request.getEnabled() == null) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "at least one field must be provided"));
+            return Uni.createFrom().item(invalidRequest("at least one field must be provided"));
         }
 
         return userRepository.findUserById(userId).flatMap(opt -> {
             if (opt.isEmpty()) {
-                return Uni.createFrom().item(AdminServiceResult.notFound("not_found", "User not found"));
+                return Uni.createFrom().item(userNotFound());
             }
             User user = opt.get();
-            if (request.getEmail() != null) {
-                user.email = request.getEmail().isBlank() ? null : request.getEmail().trim();
-            }
-            if (request.getRoles() != null) {
-                if (request.getRoles().isEmpty()) {
-                    return Uni.createFrom().item(AdminServiceResult.badRequest(
-                            "invalid_request", "roles must not be empty"));
-                }
-                user.roles = List.copyOf(request.getRoles());
-            }
-            if (request.getEnabled() != null) {
-                user.enabled = request.getEnabled();
+            AdminServiceResult<UserResponse> applyError = applyUpdate(user, request);
+            if (applyError != null) {
+                return Uni.createFrom().item(applyError);
             }
             return userRepository.updateUser(user)
                     .flatMap(ignored -> userRepository.findUserById(userId))
@@ -110,17 +104,16 @@ public class AdminUserService {
 
     public Uni<AdminServiceResult<Void>> changePassword(UUID userId, PasswordChangeRequest request) {
         if (request == null || request.getNewPassword() == null || request.getNewPassword().isBlank()) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "new_password is required"));
+            return Uni.createFrom().item(invalidRequest("new_password is required"));
         }
         if (request.getNewPassword().length() < MIN_PASSWORD_LENGTH) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "new_password must be at least " + MIN_PASSWORD_LENGTH + " characters"));
+            return Uni.createFrom().item(invalidRequest(
+                    "new_password must be at least " + MIN_PASSWORD_LENGTH + " characters"));
         }
 
         return userRepository.findUserById(userId).flatMap(opt -> {
             if (opt.isEmpty()) {
-                return Uni.createFrom().item(AdminServiceResult.notFound("not_found", "User not found"));
+                return Uni.createFrom().item(userNotFound());
             }
             User user = opt.get();
             user.passwordHash = passwordService.hashPassword(request.getNewPassword());
@@ -131,5 +124,29 @@ public class AdminUserService {
 
     public static UserResponse toResponse(User user) {
         return new UserResponse(user.id, user.username, user.email, user.roles, user.enabled, user.createdAt);
+    }
+
+    private static AdminServiceResult<UserResponse> applyUpdate(User user, UserUpdateRequest request) {
+        if (request.getEmail() != null) {
+            user.email = request.getEmail().isBlank() ? null : request.getEmail().trim();
+        }
+        if (request.getRoles() != null) {
+            if (request.getRoles().isEmpty()) {
+                return invalidRequest("roles must not be empty");
+            }
+            user.roles = List.copyOf(request.getRoles());
+        }
+        if (request.getEnabled() != null) {
+            user.enabled = request.getEnabled().booleanValue();
+        }
+        return null;
+    }
+
+    private static <T> AdminServiceResult<T> invalidRequest(String description) {
+        return AdminServiceResult.badRequest(ERROR_INVALID_REQUEST, description);
+    }
+
+    private static <T> AdminServiceResult<T> userNotFound() {
+        return AdminServiceResult.notFound(ERROR_NOT_FOUND, MSG_USER_NOT_FOUND);
     }
 }

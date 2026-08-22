@@ -72,8 +72,8 @@ class ConsentServiceTest {
 
         UserConsent entity = await(() -> consentRepository.find(USER_ID, CLIENT_ID));
         assertNotNull(entity);
-        assertTrue(entity.scopes.containsAll(List.of("openid", "profile", "email")));
-        assertEquals(3, entity.scopes.size());
+        assertTrue(entity.getScopes().containsAll(List.of("openid", "profile", "email")));
+        assertEquals(3, entity.getScopes().size());
     }
 
     @Test

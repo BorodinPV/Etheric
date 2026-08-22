@@ -3,20 +3,18 @@ package com.etheric.service;
 import com.etheric.model.IntrospectionResponse;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import lombok.RequiredArgsConstructor;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
 /**
  * RFC 7662 token introspection logic used by {@code POST /introspect}.
  */
 @ApplicationScoped
+@RequiredArgsConstructor
 public class TokenIntrospectionService {
 
-    @Inject
-    CacheService cacheService;
-
-    @Inject
-    JwtService jwtService;
+    private final CacheService cacheService;
+    private final JwtService jwtService;
 
     public Uni<IntrospectionResponse> introspect(String token, String tokenTypeHint) {
         if (token == null || token.isBlank()) {

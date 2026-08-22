@@ -1,8 +1,13 @@
 package com.etheric.exception;
 
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+
 /**
  * OAuth 2.0 / OIDC error codes with standard descriptions.
  */
+@Getter
+@RequiredArgsConstructor
 public enum OAuthError {
 
     INVALID_REQUEST("invalid_request", "The request is missing a required parameter or is otherwise malformed."),
@@ -18,17 +23,4 @@ public enum OAuthError {
 
     private final String error;
     private final String errorDescription;
-
-    OAuthError(String error, String errorDescription) {
-        this.error = error;
-        this.errorDescription = errorDescription;
-    }
-
-    public String getError() {
-        return error;
-    }
-
-    public String getErrorDescription() {
-        return errorDescription;
-    }
 }

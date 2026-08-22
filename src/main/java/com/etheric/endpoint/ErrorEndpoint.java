@@ -1,9 +1,9 @@
 package com.etheric.endpoint;
 
+import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import io.smallrye.mutiny.Uni;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -17,8 +17,11 @@ import jakarta.ws.rs.core.Response;
 @Path("/error")
 public class ErrorEndpoint {
 
-    @Inject
-    Template error;
+    private final Template error;
+
+    public ErrorEndpoint(@Location("error") Template error) {
+        this.error = error;
+    }
 
     @GET
     @Produces(MediaType.TEXT_HTML)

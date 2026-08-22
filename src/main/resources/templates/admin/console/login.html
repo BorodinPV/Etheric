@@ -21,16 +21,16 @@
             <span>{i18n.get('app.brand')}</span>
         </div>
         <nav class="pf-c-locale-switcher pf-c-locale-switcher--center" aria-label="Language">
-            <a class="pf-c-locale-switcher__link {#if locale == 'en'}active{/if}" href="/admin/console/locale?lang=en">{i18n.get('lang.en')}</a>
+            <a class="pf-c-locale-switcher__link {#if locale == 'en'}active{/if}" href="{consolePath}/locale?lang=en">{i18n.get('lang.en')}</a>
             <span class="pf-c-locale-switcher__sep">|</span>
-            <a class="pf-c-locale-switcher__link {#if locale == 'ru'}active{/if}" href="/admin/console/locale?lang=ru">{i18n.get('lang.ru')}</a>
+            <a class="pf-c-locale-switcher__link {#if locale == 'ru'}active{/if}" href="{consolePath}/locale?lang=ru">{i18n.get('lang.ru')}</a>
         </nav>
         <h1 class="pf-c-login__title">{i18n.get('login.title')}</h1>
         <p class="pf-c-login__subtitle">{i18n.get('login.subtitle')}</p>
         {#if error}
         <div class="pf-c-alert pf-m-danger">{error}</div>
         {/if}
-        <form method="post" action="/admin/console/login">
+        <form method="post" action="{consolePath}/login">
             <input type="hidden" name="csrf_token" value="{csrfToken}">
             {#if redirectUri}
             <input type="hidden" name="redirect_uri" value="{redirectUri}">

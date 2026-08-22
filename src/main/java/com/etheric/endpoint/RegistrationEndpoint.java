@@ -8,10 +8,10 @@ import com.etheric.service.CacheService;
 import com.etheric.service.RegistrationService;
 import com.etheric.util.OAuthRedirectBuilder;
 import com.etheric.util.SessionCookieFactory;
+import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import io.smallrye.mutiny.Uni;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.*;
 
@@ -25,23 +25,26 @@ import java.util.UUID;
 @Path("/register")
 public class RegistrationEndpoint {
 
-    @Inject
-    Template register;
+    private final Template register;
+    private final RegistrationService registrationService;
+    private final AuthSessionService authSessionService;
+    private final CacheService cacheService;
+    private final SessionCookieFactory sessionCookieFactory;
+    private final EthericRegistrationConfig registrationConfig;
 
-    @Inject
-    RegistrationService registrationService;
-
-    @Inject
-    AuthSessionService authSessionService;
-
-    @Inject
-    CacheService cacheService;
-
-    @Inject
-    SessionCookieFactory sessionCookieFactory;
-
-    @Inject
-    EthericRegistrationConfig registrationConfig;
+    public RegistrationEndpoint(@Location("register") Template register,
+                                RegistrationService registrationService,
+                                AuthSessionService authSessionService,
+                                CacheService cacheService,
+                                SessionCookieFactory sessionCookieFactory,
+                                EthericRegistrationConfig registrationConfig) {
+        this.register = register;
+        this.registrationService = registrationService;
+        this.authSessionService = authSessionService;
+        this.cacheService = cacheService;
+        this.sessionCookieFactory = sessionCookieFactory;
+        this.registrationConfig = registrationConfig;
+    }
 
     @GET
     @Produces(MediaType.TEXT_HTML)
@@ -69,51 +72,51 @@ public class RegistrationEndpoint {
 
     @POST
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-    public Uni<Response> postRegister(
-            @FormParam("username") String username,
-            @FormParam("password") String password,
-            @FormParam("email") String email,
-            @FormParam("state") String state,
-            @FormParam("client_id") String clientId,
-            @FormParam("return_uri") String returnUri,
-            @FormParam("csrf_token") String csrfToken,
-            @Context HttpHeaders headers) {
+    public Uni<Response> postRegister(@BeanParam RegisterFormParams params, @Context HttpHeaders headers) {
+        return handleRegisterPost(params.toForm(), headers);
+    }
+
+    private Uni<Response> handleRegisterPost(RegisterForm form, HttpHeaders headers) {
         if (!registrationConfig.enabled()) {
             return Uni.createFrom().item(Response.status(Response.Status.NOT_FOUND).build());
         }
 
-        return authSessionService.resolveOAuthPolicy(state).flatMap(policy -> {
+        return authSessionService.resolveOAuthPolicy(form.state()).flatMap(policy -> {
             String sessionId = sessionCookieFactory.extractSessionId(headers, policy);
             if (sessionId == null) {
-                return Uni.createFrom().item(Response.status(Response.Status.FORBIDDEN)
-                        .entity("Invalid CSRF token").build());
+                return forbiddenCsrf();
             }
-
-            return cacheService.getSession(sessionId).flatMap(session -> {
-                if (session == null || csrfToken == null || !csrfToken.equals(session.getCsrfToken())) {
-                    return Uni.createFrom().item(Response.status(Response.Status.FORBIDDEN)
-                            .entity("Invalid CSRF token").build());
-                }
-                return registrationService.register(username, password, email, state, clientId)
-                        .flatMap(result -> {
-                            if (!result.success()) {
-                                return renderRegisterError(sessionId, session, state, clientId, returnUri,
-                                        policy, result.errorMessage());
-                            }
-                            if (state != null && !state.isBlank()) {
-                                return authSessionService.completeLogin(result.userId(), state, policy);
-                            }
-                            return redirectAfterStandaloneRegistration(result.userId(), clientId, returnUri, policy);
-                        });
-            });
+            return cacheService.getSession(sessionId)
+                    .flatMap(session -> completeRegister(form, sessionId, session, policy));
         });
     }
 
-    private Uni<Response> redirectAfterStandaloneRegistration(String userId, String clientId, String returnUri,
-                                                              ClientOAuthPolicy policy) {
-        if (returnUri != null && !returnUri.isBlank() && clientId != null && !clientId.isBlank()) {
+    private Uni<Response> completeRegister(RegisterForm form, String sessionId, SessionData session,
+                                           ClientOAuthPolicy policy) {
+        if (isInvalidCsrf(session, form.csrfToken())) {
+            return forbiddenCsrf();
+        }
+        return registrationService.register(form.username(), form.password(), form.email(),
+                        form.state(), form.clientId())
+                .flatMap(result -> finishRegistration(form, sessionId, session, policy, result));
+    }
+
+    private Uni<Response> finishRegistration(RegisterForm form, String sessionId, SessionData session,
+                                             ClientOAuthPolicy policy,
+                                             RegistrationService.RegistrationResult result) {
+        if (!result.success()) {
+            return renderRegisterError(sessionId, session, form, policy, result.errorMessage());
+        }
+        if (hasText(form.state())) {
+            return authSessionService.completeLogin(result.userId(), form.state(), policy);
+        }
+        return redirectAfterStandaloneRegistration(form.clientId(), form.returnUri());
+    }
+
+    private Uni<Response> redirectAfterStandaloneRegistration(String clientId, String returnUri) {
+        if (hasText(returnUri) && hasText(clientId)) {
             return registrationService.isReturnUriAllowed(clientId, returnUri).flatMap(allowed -> {
-                if (allowed) {
+                if (Boolean.TRUE.equals(allowed)) {
                     URI target = OAuthRedirectBuilder.build(returnUri.trim(), Map.of("registered", "1"));
                     return Uni.createFrom().item(Response.seeOther(target).build());
                 }
@@ -135,14 +138,14 @@ public class RegistrationEndpoint {
         return renderRegisterPage(sessionId, session, state, clientId, returnUri, policy, true);
     }
 
-    private Uni<Response> renderRegisterError(String sessionId, SessionData session, String state,
-                                              String clientId, String returnUri, ClientOAuthPolicy policy,
-                                              String error) {
+    private Uni<Response> renderRegisterError(String sessionId, SessionData session, RegisterForm form,
+                                              ClientOAuthPolicy policy, String error) {
         String newCsrfToken = UUID.randomUUID().toString();
         session.setCsrfToken(newCsrfToken);
         return cacheService.saveSession(sessionId, session, policy.getSessionLifetimeSeconds())
-                .replaceWith(buildRegisterResponse(sessionId, state, clientId, returnUri, newCsrfToken,
-                        error, false, policy));
+                .replaceWith(buildRegisterResponse(new RegisterResponseParams(
+                        sessionId, form.state(), form.clientId(), form.returnUri(),
+                        newCsrfToken, error, false, policy)));
     }
 
     private Uni<Response> renderRegisterPage(String sessionId, SessionData session, String state,
@@ -151,23 +154,64 @@ public class RegistrationEndpoint {
         String csrfToken = UUID.randomUUID().toString();
         session.setCsrfToken(csrfToken);
         return cacheService.saveSession(sessionId, session, policy.getSessionLifetimeSeconds())
-                .replaceWith(buildRegisterResponse(sessionId, state, clientId, returnUri, csrfToken,
-                        null, issueCookie, policy));
+                .replaceWith(buildRegisterResponse(new RegisterResponseParams(
+                        sessionId, state, clientId, returnUri, csrfToken, null, issueCookie, policy)));
     }
 
-    private Response buildRegisterResponse(String sessionId, String state, String clientId, String returnUri,
-                                           String csrfToken, String error, boolean issueCookie,
-                                           ClientOAuthPolicy policy) {
+    private Response buildRegisterResponse(RegisterResponseParams params) {
         TemplateInstance template = register.instance();
-        template.data("error", error);
-        template.data("state", state);
-        template.data("clientId", clientId);
-        template.data("returnUri", returnUri);
-        template.data("csrfToken", csrfToken);
+        template.data("error", params.error());
+        template.data("state", params.state());
+        template.data("clientId", params.clientId());
+        template.data("returnUri", params.returnUri());
+        template.data("csrfToken", params.csrfToken());
         Response.ResponseBuilder response = Response.ok(template.render()).type(MediaType.TEXT_HTML);
-        if (issueCookie) {
-            response.header("Set-Cookie", sessionCookieFactory.create(sessionId, policy));
+        if (params.issueCookie()) {
+            response.header("Set-Cookie", sessionCookieFactory.create(params.sessionId(), params.policy()));
         }
         return response.build();
+    }
+
+    private static Uni<Response> forbiddenCsrf() {
+        return Uni.createFrom().item(Response.status(Response.Status.FORBIDDEN)
+                .entity("Invalid CSRF token").build());
+    }
+
+    private static boolean isInvalidCsrf(SessionData session, String csrfToken) {
+        return session == null || csrfToken == null || !csrfToken.equals(session.getCsrfToken());
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    public static class RegisterFormParams {
+        @FormParam("username")
+        String username;
+        @FormParam("password")
+        String password;
+        @FormParam("email")
+        String email;
+        @FormParam("state")
+        String state;
+        @FormParam("client_id")
+        String clientId;
+        @FormParam("return_uri")
+        String returnUri;
+        @FormParam("csrf_token")
+        String csrfToken;
+
+        private RegisterForm toForm() {
+            return new RegisterForm(username, password, email, state, clientId, returnUri, csrfToken);
+        }
+    }
+
+    private record RegisterForm(String username, String password, String email, String state,
+                                String clientId, String returnUri, String csrfToken) {
+    }
+
+    private record RegisterResponseParams(String sessionId, String state, String clientId, String returnUri,
+                                          String csrfToken, String error, boolean issueCookie,
+                                          ClientOAuthPolicy policy) {
     }
 }

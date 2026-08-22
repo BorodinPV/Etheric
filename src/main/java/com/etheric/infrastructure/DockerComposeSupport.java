@@ -1,5 +1,7 @@
 package com.etheric.infrastructure;
 
+import org.jboss.logging.Logger;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,6 +14,8 @@ import java.util.concurrent.TimeUnit;
  * Shared helpers for starting and stopping docker-compose from Maven, tests, or dev scripts.
  */
 public final class DockerComposeSupport {
+
+    private static final Logger LOG = Logger.getLogger(DockerComposeSupport.class);
 
     private DockerComposeSupport() {
     }
@@ -70,12 +74,10 @@ public final class DockerComposeSupport {
         try {
             int exitCode = execCompose(true, args);
             if (exitCode != 0) {
-                System.err.println("Warning: docker compose " + String.join(" ", args)
-                        + " exited with code " + exitCode);
+                LOG.warnf("docker compose %s exited with code %d", String.join(" ", args), exitCode);
             }
         } catch (RuntimeException e) {
-            System.err.println("Warning: docker compose " + String.join(" ", args)
-                    + " failed: " + e.getMessage());
+            LOG.warnf("docker compose %s failed: %s", String.join(" ", args), e.getMessage());
         }
     }
 

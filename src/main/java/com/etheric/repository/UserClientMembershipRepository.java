@@ -1,7 +1,6 @@
 package com.etheric.repository;
 
 import com.etheric.entity.UserClientMembership;
-import com.etheric.entity.UserClientMembershipId;
 import io.quarkus.hibernate.reactive.panache.PanacheRepository;
 import io.quarkus.hibernate.reactive.panache.common.WithSession;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
@@ -9,6 +8,7 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -42,7 +42,7 @@ public class UserClientMembershipRepository implements PanacheRepository<UserCli
             if (clientIds == null || clientIds.isEmpty()) {
                 return Uni.createFrom().voidItem();
             }
-            OffsetDateTime now = OffsetDateTime.now();
+            OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
             Uni<Void> chain = Uni.createFrom().voidItem();
             for (String clientId : clientIds.stream().distinct().toList()) {
                 if (clientId == null || clientId.isBlank()) {
@@ -61,7 +61,7 @@ public class UserClientMembershipRepository implements PanacheRepository<UserCli
             if (userIds == null || userIds.isEmpty()) {
                 return Uni.createFrom().voidItem();
             }
-            OffsetDateTime now = OffsetDateTime.now();
+            OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
             Uni<Void> chain = Uni.createFrom().voidItem();
             for (UUID userId : userIds.stream().distinct().toList()) {
                 if (userId == null) {
@@ -81,7 +81,7 @@ public class UserClientMembershipRepository implements PanacheRepository<UserCli
                     if (existing > 0) {
                         return Uni.createFrom().voidItem();
                     }
-                    return persist(new UserClientMembership(userId, clientId, OffsetDateTime.now()))
+                    return persist(new UserClientMembership(userId, clientId, OffsetDateTime.now(ZoneOffset.UTC)))
                             .replaceWithVoid();
                 });
     }

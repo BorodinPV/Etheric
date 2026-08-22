@@ -11,20 +11,22 @@ import java.util.Map;
  */
 public final class OAuthRedirectBuilder {
 
+    private static final String STATE = "state";
+
     private OAuthRedirectBuilder() {
     }
 
     public static URI authorizationSuccess(String redirectUri, String code, String state) {
         Map<String, String> params = new LinkedHashMap<>();
         params.put("code", code);
-        params.put("state", state);
+        params.put(STATE, state);
         return build(redirectUri, params);
     }
 
     public static URI accessDenied(String redirectUri, String state) {
         Map<String, String> params = new LinkedHashMap<>();
         params.put("error", "access_denied");
-        params.put("state", state);
+        params.put(STATE, state);
         return build(redirectUri, params);
     }
 
@@ -35,7 +37,7 @@ public final class OAuthRedirectBuilder {
             params.put("error_description", errorDescription);
         }
         if (state != null) {
-            params.put("state", state);
+            params.put(STATE, state);
         }
         return build(redirectUri, params);
     }

@@ -14,7 +14,7 @@ public class PostgresHealthCheck implements AsyncHealthCheck {
 
     @Override
     public Uni<HealthCheckResponse> call() {
-        return Panache.withSession(() -> Client.count())
+        return Panache.withSession(Client::count)
                 .map(count -> HealthCheckResponse.named("postgresql").up().build())
                 .onFailure().recoverWithItem(error ->
                         HealthCheckResponse.named("postgresql").down().withData("error", error.getMessage()).build());

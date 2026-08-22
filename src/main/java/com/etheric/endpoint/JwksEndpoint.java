@@ -3,12 +3,12 @@ package com.etheric.endpoint;
 import com.etheric.model.JwksResponse;
 import com.etheric.service.JwtService;
 import io.smallrye.mutiny.Uni;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import lombok.RequiredArgsConstructor;
 
 /**
  * JSON Web Key Set endpoint ({@code GET /.well-known/jwks.json}).
@@ -17,10 +17,10 @@ import jakarta.ws.rs.core.Response;
  * Success: {@code 200} JSON {@code {"keys":[…]}}.
  */
 @Path("/.well-known")
+@RequiredArgsConstructor
 public class JwksEndpoint {
 
-    @Inject
-    JwtService jwtService;
+    private final JwtService jwtService;
 
     @GET
     @Path("/jwks.json")

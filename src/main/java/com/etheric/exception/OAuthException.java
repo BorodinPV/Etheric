@@ -1,8 +1,11 @@
 package com.etheric.exception;
 
+import lombok.Getter;
+
 /**
  * Application-level OAuth protocol error with optional redirect context.
  */
+@Getter
 public class OAuthException extends RuntimeException {
 
     private final OAuthError error;
@@ -32,22 +35,6 @@ public class OAuthException extends RuntimeException {
         this.redirectUri = null;
         this.state = null;
         this.httpStatus = httpStatus;
-    }
-
-    public OAuthError getError() {
-        return error;
-    }
-
-    public String getRedirectUri() {
-        return redirectUri;
-    }
-
-    public String getState() {
-        return state;
-    }
-
-    public int getHttpStatus() {
-        return httpStatus;
     }
 
     public boolean hasRedirectUri() {

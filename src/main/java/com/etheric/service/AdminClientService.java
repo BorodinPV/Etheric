@@ -8,9 +8,9 @@ import com.etheric.model.ClientRegistrationResponse;
 import com.etheric.repository.ClientRepository;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,29 +19,26 @@ public class AdminClientService {
 
     private static final List<String> DEFAULT_SCOPES = List.of("openid", "profile", "email");
     private static final List<String> DEFAULT_GRANT_TYPES = List.of("authorization_code", "refresh_token");
+    private static final String ERROR_INVALID_REQUEST = "invalid_request";
+    private static final String ERROR_NOT_FOUND = "not_found";
+    private static final String MSG_CLIENT_NOT_FOUND = "Client not found";
 
-    @Inject
-    ClientRepository clientRepository;
+    private final ClientRepository clientRepository;
+    private final PasswordService passwordService;
+    private final TokenPolicyService tokenPolicyService;
 
-    @Inject
-    PasswordService passwordService;
-
-    @Inject
-    TokenPolicyService tokenPolicyService;
+    public AdminClientService(ClientRepository clientRepository,
+                              PasswordService passwordService,
+                              TokenPolicyService tokenPolicyService) {
+        this.clientRepository = clientRepository;
+        this.passwordService = passwordService;
+        this.tokenPolicyService = tokenPolicyService;
+    }
 
     public Uni<AdminServiceResult<ClientRegistrationResponse>> register(ClientRegistrationRequest request) {
-        if (request == null
-                || request.getClientName() == null || request.getClientName().isBlank()
-                || request.getRedirectUris() == null || request.getRedirectUris().isEmpty()) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "client_name and redirect_uris are required"));
-        }
-
-        for (String uri : request.getRedirectUris()) {
-            if (uri == null || uri.isBlank()) {
-                return Uni.createFrom().item(AdminServiceResult.badRequest(
-                        "invalid_request", "redirect_uris must not contain blank values"));
-            }
+        AdminServiceResult<ClientRegistrationResponse> invalid = validateRegisterRequest(request);
+        if (invalid != null) {
+            return Uni.createFrom().item(invalid);
         }
 
         OAuthSettings oauthSettings = resolveOAuthSettingsForClient(
@@ -51,7 +48,7 @@ public class AdminClientService {
                 request.getSessionCookieName(),
                 request.getSessionCookieSecure());
         if (oauthSettings.error() != null) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest("invalid_request", oauthSettings.error()));
+            return Uni.createFrom().item(invalidRequest(oauthSettings.error()));
         }
 
         String clientId = request.getClientId();
@@ -69,15 +66,13 @@ public class AdminClientService {
             String plaintextSecret = UUID.randomUUID().toString() + UUID.randomUUID();
             String secretHash = passwordService.hashPassword(plaintextSecret);
 
-            List<String> scopes = (request.getScopes() == null || request.getScopes().isEmpty())
-                    ? DEFAULT_SCOPES : List.copyOf(request.getScopes());
-            List<String> grantTypes = (request.getGrantTypes() == null || request.getGrantTypes().isEmpty())
-                    ? DEFAULT_GRANT_TYPES : List.copyOf(request.getGrantTypes());
-
             Client client = new Client(
                     UUID.randomUUID(), resolvedClientId, secretHash, request.getClientName().trim(),
-                    List.copyOf(request.getRedirectUris()), scopes, grantTypes, true,
-                    OffsetDateTime.now(), request.getClientDescription(),
+                    List.copyOf(request.getRedirectUris()),
+                    copyOrDefault(request.getScopes(), DEFAULT_SCOPES),
+                    copyOrDefault(request.getGrantTypes(), DEFAULT_GRANT_TYPES),
+                    true,
+                    OffsetDateTime.now(ZoneOffset.UTC), request.getClientDescription(),
                     oauthSettings.accessTokenLifetimeSeconds(),
                     oauthSettings.refreshTokenLifetimeSeconds(),
                     oauthSettings.sessionLifetimeSeconds(),
@@ -97,88 +92,25 @@ public class AdminClientService {
     public Uni<AdminServiceResult<ClientRegistrationResponse>> get(String clientId) {
         return clientRepository.findByClientId(clientId)
                 .map(opt -> opt.map(c -> AdminServiceResult.ok(toResponse(c, null)))
-                        .orElseGet(() -> AdminServiceResult.notFound("not_found", "Client not found")));
+                        .orElseGet(() -> clientNotFound()));
     }
 
     public Uni<AdminServiceResult<ClientRegistrationResponse>> update(String clientId, ClientUpdateRequest request) {
-        if (request == null) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "request body is required"));
-        }
-        if (request.getClientName() == null
-                && request.getRedirectUris() == null
-                && request.getScopes() == null
-                && request.getGrantTypes() == null
-                && request.getEnabled() == null
-                && request.getClientDescription() == null
-                && request.getAccessTokenLifetimeSeconds() == null
-                && request.getRefreshTokenLifetimeSeconds() == null
-                && request.getSessionLifetimeSeconds() == null
-                && request.getSessionCookieName() == null
-                && request.getSessionCookieSecure() == null) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "at least one field must be provided"));
-        }
-        if (request.getClientName() != null && request.getClientName().isBlank()) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "client_name must not be blank"));
-        }
-        if (request.getRedirectUris() != null) {
-            if (request.getRedirectUris().isEmpty()) {
-                return Uni.createFrom().item(AdminServiceResult.badRequest(
-                        "invalid_request", "redirect_uris must not be empty"));
-            }
-            for (String uri : request.getRedirectUris()) {
-                if (uri == null || uri.isBlank()) {
-                    return Uni.createFrom().item(AdminServiceResult.badRequest(
-                            "invalid_request", "redirect_uris must not contain blank values"));
-                }
-            }
-        }
-        if (request.getScopes() != null && request.getScopes().isEmpty()) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "scopes must not be empty"));
-        }
-        if (request.getGrantTypes() != null && request.getGrantTypes().isEmpty()) {
-            return Uni.createFrom().item(AdminServiceResult.badRequest(
-                    "invalid_request", "grant_types must not be empty"));
+        AdminServiceResult<ClientRegistrationResponse> invalid = validateUpdateRequest(request);
+        if (invalid != null) {
+            return Uni.createFrom().item(invalid);
         }
 
         return clientRepository.findByClientId(clientId).flatMap(opt -> {
             if (opt.isEmpty()) {
-                return Uni.createFrom().item(AdminServiceResult.notFound("not_found", "Client not found"));
+                return Uni.createFrom().item(clientNotFound());
             }
             Client client = opt.get();
             OAuthSettings oauthSettings = resolveOAuthSettingsForUpdate(client, request);
             if (oauthSettings.error() != null) {
-                return Uni.createFrom().item(AdminServiceResult.badRequest("invalid_request", oauthSettings.error()));
+                return Uni.createFrom().item(invalidRequest(oauthSettings.error()));
             }
-            if (request.getClientName() != null) {
-                client.clientName = request.getClientName().trim();
-            }
-            if (request.getRedirectUris() != null) {
-                client.redirectUris = List.copyOf(request.getRedirectUris());
-            }
-            if (request.getScopes() != null) {
-                client.scopes = List.copyOf(request.getScopes());
-            }
-            if (request.getGrantTypes() != null) {
-                client.grantTypes = List.copyOf(request.getGrantTypes());
-            }
-            if (request.getEnabled() != null) {
-                client.enabled = request.getEnabled();
-            }
-            if (request.getClientDescription() != null) {
-                client.clientDescription = request.getClientDescription().isBlank()
-                        ? null : request.getClientDescription().trim();
-            }
-            if (oauthSettings.apply()) {
-                client.accessTokenLifetimeSeconds = oauthSettings.accessTokenLifetimeSeconds();
-                client.refreshTokenLifetimeSeconds = oauthSettings.refreshTokenLifetimeSeconds();
-                client.sessionLifetimeSeconds = oauthSettings.sessionLifetimeSeconds();
-                client.sessionCookieName = oauthSettings.sessionCookieName();
-                client.sessionCookieSecure = oauthSettings.sessionCookieSecure();
-            }
+            applyUpdate(client, request, oauthSettings);
             return clientRepository.updateClient(client)
                     .flatMap(ignored -> clientRepository.findByClientId(clientId))
                     .map(updated -> AdminServiceResult.ok(toResponse(updated.orElseThrow(), null)));
@@ -198,18 +130,10 @@ public class AdminClientService {
         return update(clientId, request);
     }
 
-    /** @deprecated Use {@link #update} with OAuth fields */
-    public Uni<AdminServiceResult<ClientRegistrationResponse>> updateTokenLifetimes(
-            String clientId, Integer accessTokenLifetimeSeconds,
-            Integer refreshTokenLifetimeSeconds, Integer sessionLifetimeSeconds) {
-        return updateOAuthSettings(clientId, accessTokenLifetimeSeconds, refreshTokenLifetimeSeconds,
-                sessionLifetimeSeconds, null, null);
-    }
-
     public Uni<AdminServiceResult<ClientRegistrationResponse>> regenerateSecret(String clientId) {
         return clientRepository.findByClientId(clientId).flatMap(opt -> {
             if (opt.isEmpty()) {
-                return Uni.createFrom().item(AdminServiceResult.notFound("not_found", "Client not found"));
+                return Uni.createFrom().item(clientNotFound());
             }
             Client client = opt.get();
             String plaintextSecret = UUID.randomUUID().toString() + UUID.randomUUID();
@@ -225,6 +149,120 @@ public class AdminClientService {
                 client.scopes, client.grantTypes, client.enabled, client.clientDescription,
                 client.accessTokenLifetimeSeconds, client.refreshTokenLifetimeSeconds,
                 client.sessionLifetimeSeconds, client.sessionCookieName, client.sessionCookieSecure);
+    }
+
+    private static AdminServiceResult<ClientRegistrationResponse> validateRegisterRequest(
+            ClientRegistrationRequest request) {
+        if (request == null
+                || request.getClientName() == null || request.getClientName().isBlank()
+                || request.getRedirectUris() == null || request.getRedirectUris().isEmpty()) {
+            return invalidRequest("client_name and redirect_uris are required");
+        }
+        if (containsBlankUri(request.getRedirectUris())) {
+            return invalidRequest("redirect_uris must not contain blank values");
+        }
+        return null;
+    }
+
+    private static AdminServiceResult<ClientRegistrationResponse> validateUpdateRequest(ClientUpdateRequest request) {
+        if (request == null) {
+            return invalidRequest("request body is required");
+        }
+        if (hasNoUpdateFields(request)) {
+            return invalidRequest("at least one field must be provided");
+        }
+        if (request.getClientName() != null && request.getClientName().isBlank()) {
+            return invalidRequest("client_name must not be blank");
+        }
+        AdminServiceResult<ClientRegistrationResponse> redirectUriError = validateUpdateRedirectUris(request);
+        if (redirectUriError != null) {
+            return redirectUriError;
+        }
+        if (request.getScopes() != null && request.getScopes().isEmpty()) {
+            return invalidRequest("scopes must not be empty");
+        }
+        if (request.getGrantTypes() != null && request.getGrantTypes().isEmpty()) {
+            return invalidRequest("grant_types must not be empty");
+        }
+        return null;
+    }
+
+    private static boolean hasNoUpdateFields(ClientUpdateRequest request) {
+        return request.getClientName() == null
+                && request.getRedirectUris() == null
+                && request.getScopes() == null
+                && request.getGrantTypes() == null
+                && request.getEnabled() == null
+                && request.getClientDescription() == null
+                && request.getAccessTokenLifetimeSeconds() == null
+                && request.getRefreshTokenLifetimeSeconds() == null
+                && request.getSessionLifetimeSeconds() == null
+                && request.getSessionCookieName() == null
+                && request.getSessionCookieSecure() == null;
+    }
+
+    private static AdminServiceResult<ClientRegistrationResponse> validateUpdateRedirectUris(
+            ClientUpdateRequest request) {
+        if (request.getRedirectUris() == null) {
+            return null;
+        }
+        if (request.getRedirectUris().isEmpty()) {
+            return invalidRequest("redirect_uris must not be empty");
+        }
+        if (containsBlankUri(request.getRedirectUris())) {
+            return invalidRequest("redirect_uris must not contain blank values");
+        }
+        return null;
+    }
+
+    private static void applyUpdate(Client client, ClientUpdateRequest request, OAuthSettings oauthSettings) {
+        if (request.getClientName() != null) {
+            client.clientName = request.getClientName().trim();
+        }
+        if (request.getRedirectUris() != null) {
+            client.redirectUris = List.copyOf(request.getRedirectUris());
+        }
+        if (request.getScopes() != null) {
+            client.scopes = List.copyOf(request.getScopes());
+        }
+        if (request.getGrantTypes() != null) {
+            client.grantTypes = List.copyOf(request.getGrantTypes());
+        }
+        if (request.getEnabled() != null) {
+            client.enabled = request.getEnabled();
+        }
+        if (request.getClientDescription() != null) {
+            client.clientDescription = request.getClientDescription().isBlank()
+                    ? null : request.getClientDescription().trim();
+        }
+        if (oauthSettings.apply()) {
+            client.accessTokenLifetimeSeconds = oauthSettings.accessTokenLifetimeSeconds();
+            client.refreshTokenLifetimeSeconds = oauthSettings.refreshTokenLifetimeSeconds();
+            client.sessionLifetimeSeconds = oauthSettings.sessionLifetimeSeconds();
+            client.sessionCookieName = oauthSettings.sessionCookieName();
+            client.sessionCookieSecure = oauthSettings.sessionCookieSecure();
+        }
+    }
+
+    private static boolean containsBlankUri(List<String> uris) {
+        for (String uri : uris) {
+            if (uri == null || uri.isBlank()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<String> copyOrDefault(List<String> values, List<String> defaults) {
+        return (values == null || values.isEmpty()) ? defaults : List.copyOf(values);
+    }
+
+    private static <T> AdminServiceResult<T> invalidRequest(String description) {
+        return AdminServiceResult.badRequest(ERROR_INVALID_REQUEST, description);
+    }
+
+    private static <T> AdminServiceResult<T> clientNotFound() {
+        return AdminServiceResult.notFound(ERROR_NOT_FOUND, MSG_CLIENT_NOT_FOUND);
     }
 
     private OAuthSettings resolveOAuthSettingsForUpdate(Client client, ClientUpdateRequest request) {

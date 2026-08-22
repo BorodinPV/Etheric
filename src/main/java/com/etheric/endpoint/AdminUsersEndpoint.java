@@ -6,10 +6,10 @@ import com.etheric.model.UserUpdateRequest;
 import com.etheric.service.AdminServiceResult;
 import com.etheric.service.AdminUserService;
 import io.smallrye.mutiny.Uni;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import lombok.RequiredArgsConstructor;
 
 import java.util.UUID;
 
@@ -20,10 +20,10 @@ import java.util.UUID;
  */
 @Path("/admin/users")
 @Produces(MediaType.APPLICATION_JSON)
+@RequiredArgsConstructor
 public class AdminUsersEndpoint {
 
-    @Inject
-    AdminUserService adminUserService;
+    private final AdminUserService adminUserService;
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)

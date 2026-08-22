@@ -8,7 +8,7 @@ import com.etheric.repository.UserRepository;
 import com.etheric.util.AdminSessionCookieFactory;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import lombok.RequiredArgsConstructor;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 
@@ -17,23 +17,16 @@ import java.util.List;
 import java.util.UUID;
 
 @ApplicationScoped
+@RequiredArgsConstructor
 public class AdminConsoleAuthService {
 
     public static final String ADMIN_ROLE = "admin";
     public static final String SESSION_PROPERTY = "admin.session";
     public static final String SESSION_ID_PROPERTY = "admin.session.id";
 
-    @Inject
-    UserRepository userRepository;
-
-    @Inject
-    CacheService cacheService;
-
-    @Inject
-    EthericAdminConfig adminConfig;
-
-    @Inject
-    AdminSessionCookieFactory cookieFactory;
+    private final UserRepository userRepository;
+    private final CacheService cacheService;
+    private final EthericAdminConfig adminConfig;
 
     public Uni<AnonymousSession> createAnonymousSession() {
         String sessionId = UUID.randomUUID().toString();
@@ -105,8 +98,8 @@ public class AdminConsoleAuthService {
     }
 
     public Response redirectToLogin(String redirectUri) {
-        String target = "/admin/console/login";
-        if (redirectUri != null && !redirectUri.isBlank() && redirectUri.startsWith("/admin/console")) {
+        String target = adminConfig.loginPath();
+        if (redirectUri != null && !redirectUri.isBlank() && redirectUri.startsWith(adminConfig.consolePath())) {
             target += "?redirect_uri=" + java.net.URLEncoder.encode(redirectUri, java.nio.charset.StandardCharsets.UTF_8);
         }
         return Response.seeOther(URI.create(target)).build();

@@ -70,29 +70,12 @@ public class Client extends PanacheEntityBase {
     public Client() {
     }
 
-    public Client(UUID id, String clientId, String clientSecretHash, String clientName,
-                  List<String> redirectUris, List<String> scopes, List<String> grantTypes,
-                  boolean enabled, OffsetDateTime createdAt, String clientDescription) {
-        this(id, clientId, clientSecretHash, clientName, redirectUris, scopes, grantTypes,
-                enabled, createdAt, clientDescription, 3600, 604800, 28800, "SESSIONID", true);
-    }
-
+    @SuppressWarnings("java:S107")
     public Client(UUID id, String clientId, String clientSecretHash, String clientName,
                   List<String> redirectUris, List<String> scopes, List<String> grantTypes,
                   boolean enabled, OffsetDateTime createdAt, String clientDescription,
-                  int accessTokenLifetimeSeconds, int refreshTokenLifetimeSeconds,
-                  int sessionLifetimeSeconds) {
-        this(id, clientId, clientSecretHash, clientName, redirectUris, scopes, grantTypes,
-                enabled, createdAt, clientDescription, accessTokenLifetimeSeconds,
-                refreshTokenLifetimeSeconds, sessionLifetimeSeconds, "SESSIONID", true);
-    }
-
-    public Client(UUID id, String clientId, String clientSecretHash, String clientName,
-                  List<String> redirectUris, List<String> scopes, List<String> grantTypes,
-                  boolean enabled, OffsetDateTime createdAt, String clientDescription,
-                  int accessTokenLifetimeSeconds, int refreshTokenLifetimeSeconds,
-                  int sessionLifetimeSeconds, String sessionCookieName,
-                  boolean sessionCookieSecure) {
+                  ClientOAuthSettings oauthSettings) {
+        ClientOAuthSettings settings = oauthSettings != null ? oauthSettings : ClientOAuthSettings.defaults();
         this.id = id;
         this.clientId = clientId;
         this.clientSecretHash = clientSecretHash;
@@ -103,10 +86,43 @@ public class Client extends PanacheEntityBase {
         this.enabled = enabled;
         this.createdAt = createdAt;
         this.clientDescription = clientDescription;
-        this.accessTokenLifetimeSeconds = accessTokenLifetimeSeconds;
-        this.refreshTokenLifetimeSeconds = refreshTokenLifetimeSeconds;
-        this.sessionLifetimeSeconds = sessionLifetimeSeconds;
-        this.sessionCookieName = sessionCookieName;
-        this.sessionCookieSecure = sessionCookieSecure;
+        this.accessTokenLifetimeSeconds = settings.accessTokenLifetimeSeconds();
+        this.refreshTokenLifetimeSeconds = settings.refreshTokenLifetimeSeconds();
+        this.sessionLifetimeSeconds = settings.sessionLifetimeSeconds();
+        this.sessionCookieName = settings.sessionCookieName();
+        this.sessionCookieSecure = settings.sessionCookieSecure();
+    }
+
+    @SuppressWarnings("java:S107")
+    public Client(UUID id, String clientId, String clientSecretHash, String clientName,
+                  List<String> redirectUris, List<String> scopes, List<String> grantTypes,
+                  boolean enabled, OffsetDateTime createdAt, String clientDescription) {
+        this(id, clientId, clientSecretHash, clientName, redirectUris, scopes, grantTypes,
+                enabled, createdAt, clientDescription, ClientOAuthSettings.defaults());
+    }
+
+    @SuppressWarnings("java:S107")
+    public Client(UUID id, String clientId, String clientSecretHash, String clientName,
+                  List<String> redirectUris, List<String> scopes, List<String> grantTypes,
+                  boolean enabled, OffsetDateTime createdAt, String clientDescription,
+                  int accessTokenLifetimeSeconds, int refreshTokenLifetimeSeconds,
+                  int sessionLifetimeSeconds) {
+        this(id, clientId, clientSecretHash, clientName, redirectUris, scopes, grantTypes,
+                enabled, createdAt, clientDescription,
+                ClientOAuthSettings.withLifetimes(accessTokenLifetimeSeconds, refreshTokenLifetimeSeconds,
+                        sessionLifetimeSeconds));
+    }
+
+    @SuppressWarnings("java:S107")
+    public Client(UUID id, String clientId, String clientSecretHash, String clientName,
+                  List<String> redirectUris, List<String> scopes, List<String> grantTypes,
+                  boolean enabled, OffsetDateTime createdAt, String clientDescription,
+                  int accessTokenLifetimeSeconds, int refreshTokenLifetimeSeconds,
+                  int sessionLifetimeSeconds, String sessionCookieName,
+                  boolean sessionCookieSecure) {
+        this(id, clientId, clientSecretHash, clientName, redirectUris, scopes, grantTypes,
+                enabled, createdAt, clientDescription,
+                new ClientOAuthSettings(accessTokenLifetimeSeconds, refreshTokenLifetimeSeconds,
+                        sessionLifetimeSeconds, sessionCookieName, sessionCookieSecure));
     }
 }

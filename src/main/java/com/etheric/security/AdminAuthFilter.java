@@ -6,7 +6,7 @@ import com.etheric.service.CacheService;
 import com.etheric.util.AdminSessionCookieFactory;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import lombok.RequiredArgsConstructor;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -22,17 +22,15 @@ import java.util.regex.Pattern;
  * Protects admin routes: JSON API via API key, console via ADMIN_SESSION cookie.
  */
 @ApplicationScoped
+@RequiredArgsConstructor
 public class AdminAuthFilter {
 
     public static final String HEADER_NAME = "X-Admin-Api-Key";
 
     private static final Pattern STATIC_ASSET_PATH = Pattern.compile("^admin/[^/]+\\.(css|js)$");
 
-    @Inject
-    EthericAdminConfig adminConfig;
-
-    @Inject
-    CacheService cacheService;
+    private final EthericAdminConfig adminConfig;
+    private final CacheService cacheService;
 
     @ServerRequestFilter(preMatching = true)
     public Uni<Response> filter(ContainerRequestContext requestContext) {
@@ -49,7 +47,7 @@ public class AdminAuthFilter {
             return validateApiKey(requestContext);
         }
 
-        if (path.startsWith("admin/console")) {
+        if (isConsolePath(path)) {
             return validateConsoleSession(requestContext, path);
         }
 
@@ -87,20 +85,33 @@ public class AdminAuthFilter {
         });
     }
 
-    private static Response redirectToLogin(String path) {
-        String target = "/admin/console/login";
-        if (!"admin/console/login".equals(path)) {
+    private Response redirectToLogin(String path) {
+        String target = adminConfig.loginPath();
+        if (!loginRelativePath().equals(path)) {
             target += "?redirect_uri="
                     + java.net.URLEncoder.encode("/" + path, StandardCharsets.UTF_8);
         }
         return Response.seeOther(URI.create(target)).build();
     }
 
-    private static boolean isPublicPath(String path) {
-        if ("admin/console/login".equals(path) || "admin/console/locale".equals(path)) {
+    private boolean isPublicPath(String path) {
+        if (loginRelativePath().equals(path) || localeRelativePath().equals(path)) {
             return true;
         }
         return STATIC_ASSET_PATH.matcher(path).matches();
+    }
+
+    private boolean isConsolePath(String path) {
+        String prefix = adminConfig.relativeConsolePath();
+        return path.equals(prefix) || path.startsWith(prefix + "/");
+    }
+
+    private String loginRelativePath() {
+        return adminConfig.relativeConsolePath() + "/login";
+    }
+
+    private String localeRelativePath() {
+        return adminConfig.relativeConsolePath() + "/locale";
     }
 
     private static boolean isJsonAdminApi(String path) {
@@ -119,7 +130,7 @@ public class AdminAuthFilter {
 
     private static boolean secureEquals(String left, String right) {
         if (left == null || right == null) {
-            return left == right;
+            return left == null && right == null;
         }
         return MessageDigest.isEqual(
                 left.getBytes(StandardCharsets.UTF_8),

@@ -7,7 +7,7 @@
 <div class="pf-c-alert pf-m-danger">{error}</div>
 {/if}
 
-<form method="post" action="/admin/console/users/{userId}/clients">
+<form method="post" action="{consolePath}/users/{userId}/clients">
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
     <div class="ec-card">

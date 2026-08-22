@@ -6,7 +6,6 @@ import com.etheric.model.ErrorResponse;
 import com.etheric.service.CacheService;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
@@ -20,11 +19,13 @@ public class RateLimitFilter {
 
     private static final Logger LOG = Logger.getLogger(RateLimitFilter.class);
 
-    @Inject
-    CacheService cacheService;
+    private final CacheService cacheService;
+    private final EthericRateLimitConfig rateLimitConfig;
 
-    @Inject
-    EthericRateLimitConfig rateLimitConfig;
+    public RateLimitFilter(CacheService cacheService, EthericRateLimitConfig rateLimitConfig) {
+        this.cacheService = cacheService;
+        this.rateLimitConfig = rateLimitConfig;
+    }
 
     @ServerRequestFilter(preMatching = true)
     public Uni<Response> filter(ContainerRequestContext ctx) {
@@ -44,7 +45,7 @@ public class RateLimitFilter {
 
         return cacheService.checkRateLimit(bucket, limit, rateLimitConfig.windowSeconds())
                 .flatMap(allowed -> {
-                    if (allowed) {
+                    if (Boolean.TRUE.equals(allowed)) {
                         return Uni.createFrom().nullItem();
                     }
                     LOG.warnf("Rate limit exceeded for %s from %s", path, clientIp);

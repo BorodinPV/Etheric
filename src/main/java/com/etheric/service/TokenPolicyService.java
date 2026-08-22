@@ -21,28 +21,18 @@ import java.util.Map;
 @ApplicationScoped
 public class TokenPolicyService {
 
-    @Inject
-    ClientRepository clientRepository;
+    private final ClientRepository clientRepository;
+    private final EthericTtlConfig ttlConfig;
+    private final boolean configSessionCookieSecure;
 
     @Inject
-    EthericTtlConfig ttlConfig;
-
-    @ConfigProperty(name = "etheric.session.cookie.secure", defaultValue = "true")
-    boolean configSessionCookieSecure;
-
-    /** @deprecated Prefer {@link #defaultOAuthPolicy()} */
-    public String oauthSessionCookieName() {
-        return defaultOAuthPolicy().getSessionCookieName();
-    }
-
-    /** @deprecated Prefer {@link #defaultOAuthPolicy()} */
-    public boolean sessionCookieSecure() {
-        return defaultOAuthPolicy().isSessionCookieSecure();
-    }
-
-    /** @deprecated Prefer {@link #defaultOAuthPolicy()} */
-    public long oauthSessionLifetimeSeconds() {
-        return defaultOAuthPolicy().getSessionLifetimeSeconds();
+    public TokenPolicyService(ClientRepository clientRepository,
+                              EthericTtlConfig ttlConfig,
+                              @ConfigProperty(name = "etheric.session.cookie.secure", defaultValue = "true")
+                              boolean configSessionCookieSecure) {
+        this.clientRepository = clientRepository;
+        this.ttlConfig = ttlConfig;
+        this.configSessionCookieSecure = configSessionCookieSecure;
     }
 
     public ClientOAuthPolicy defaultOAuthPolicy() {

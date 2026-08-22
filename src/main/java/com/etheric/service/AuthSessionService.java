@@ -10,7 +10,6 @@ import com.etheric.util.ScopeUtil;
 import com.etheric.util.SessionCookieFactory;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 
@@ -24,26 +23,29 @@ import java.util.UUID;
 @ApplicationScoped
 public class AuthSessionService {
 
-    @Inject
-    CacheService cacheService;
+    private final CacheService cacheService;
+    private final AuthorizationCodeService authorizationCodeService;
+    private final SessionCookieFactory sessionCookieFactory;
+    private final EthericTtlConfig ttlConfig;
+    private final UserClientMembershipService membershipService;
+    private final ConsentService consentService;
+    private final TokenPolicyService tokenPolicyService;
 
-    @Inject
-    AuthorizationCodeService authorizationCodeService;
-
-    @Inject
-    SessionCookieFactory sessionCookieFactory;
-
-    @Inject
-    EthericTtlConfig ttlConfig;
-
-    @Inject
-    UserClientMembershipService membershipService;
-
-    @Inject
-    ConsentService consentService;
-
-    @Inject
-    TokenPolicyService tokenPolicyService;
+    public AuthSessionService(CacheService cacheService,
+                              AuthorizationCodeService authorizationCodeService,
+                              SessionCookieFactory sessionCookieFactory,
+                              EthericTtlConfig ttlConfig,
+                              UserClientMembershipService membershipService,
+                              ConsentService consentService,
+                              TokenPolicyService tokenPolicyService) {
+        this.cacheService = cacheService;
+        this.authorizationCodeService = authorizationCodeService;
+        this.sessionCookieFactory = sessionCookieFactory;
+        this.ttlConfig = ttlConfig;
+        this.membershipService = membershipService;
+        this.consentService = consentService;
+        this.tokenPolicyService = tokenPolicyService;
+    }
 
     public Uni<ClientOAuthPolicy> resolveOAuthPolicy(String state) {
         if (state == null) {
@@ -145,7 +147,7 @@ public class AuthSessionService {
                 return Uni.createFrom().item(buildLoginRedirect(newSessionId, state, "/consent", policy));
             }
             return membershipService.isMember(userId, requestState.getClientId()).flatMap(member -> {
-                if (!member) {
+                if (!Boolean.TRUE.equals(member)) {
                     return Uni.createFrom().failure(new OAuthException(
                             OAuthError.ACCESS_DENIED, requestState.getRedirectUri(), state));
                 }

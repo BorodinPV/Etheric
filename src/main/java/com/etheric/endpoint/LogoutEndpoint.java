@@ -4,11 +4,11 @@ import com.etheric.repository.ClientRepository;
 import com.etheric.service.AuthSessionService;
 import com.etheric.util.SessionCookieFactory;
 import io.smallrye.mutiny.Uni;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.*;
+import lombok.RequiredArgsConstructor;
 
 import java.net.URI;
 import java.util.List;
@@ -22,16 +22,12 @@ import java.util.List;
  * Clears all known OAuth session cookies and {@code 302} to target URI or {@code /}.
  */
 @Path("/logout")
+@RequiredArgsConstructor
 public class LogoutEndpoint {
 
-    @Inject
-    AuthSessionService authSessionService;
-
-    @Inject
-    SessionCookieFactory sessionCookieFactory;
-
-    @Inject
-    ClientRepository clientRepository;
+    private final AuthSessionService authSessionService;
+    private final SessionCookieFactory sessionCookieFactory;
+    private final ClientRepository clientRepository;
 
     @GET
     public Uni<Response> logout(@QueryParam("redirect_uri") String redirectUri,
@@ -56,6 +52,6 @@ public class LogoutEndpoint {
             return Uni.createFrom().item(URI.create("/"));
         }
         return clientRepository.isRegisteredRedirectUri(redirectUri)
-                .map(valid -> valid ? URI.create(redirectUri) : URI.create("/"));
+                .map(valid -> Boolean.TRUE.equals(valid) ? URI.create(redirectUri) : URI.create("/"));
     }
 }

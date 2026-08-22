@@ -2,16 +2,16 @@ package com.etheric.service;
 
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import lombok.RequiredArgsConstructor;
 
 /**
  * RFC 7009 token revocation logic used by {@code POST /revoke}.
  */
 @ApplicationScoped
+@RequiredArgsConstructor
 public class TokenRevocationService {
 
-    @Inject
-    CacheService cacheService;
+    private final CacheService cacheService;
 
     public Uni<Void> revoke(String token, String tokenTypeHint) {
         if (token == null || token.isBlank()) {

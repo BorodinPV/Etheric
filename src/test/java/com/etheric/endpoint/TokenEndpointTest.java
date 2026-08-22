@@ -1,6 +1,5 @@
 package com.etheric.endpoint;
 
-import com.etheric.model.AccessTokenData;
 import com.etheric.model.AuthorizationCodeData;
 import com.etheric.model.RefreshTokenData;
 import com.etheric.model.SessionData;

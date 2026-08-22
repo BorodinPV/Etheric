@@ -8,18 +8,18 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
         .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 40px; width: 100%; max-width: 400px; }
-        h1 { font-size: 24px; margin-bottom: 8px; color: #333; }
-        p.subtitle { color: #666; margin-bottom: 24px; font-size: 14px; }
+        h1 { font-size: 24px; margin-bottom: 8px; color: #222; }
+        p.subtitle { color: #555; margin-bottom: 24px; font-size: 14px; }
         .form-group { margin-bottom: 16px; }
-        label { display: block; font-size: 14px; font-weight: 500; color: #333; margin-bottom: 6px; }
+        label { display: block; font-size: 14px; font-weight: 500; color: #222; margin-bottom: 6px; }
         input[type="text"], input[type="password"] { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; transition: border-color 0.2s; }
-        input:focus { outline: none; border-color: #4a90d9; box-shadow: 0 0 0 3px rgba(74,144,217,0.1); }
-        button { width: 100%; padding: 10px; background: #4a90d9; color: #fff; border: none; border-radius: 6px; font-size: 16px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
-        button:hover { background: #357abd; }
-        .error { background: #fee; border: 1px solid #fcc; color: #c33; padding: 10px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
-        .success { background: #efe; border: 1px solid #cfc; color: #363; padding: 10px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
+        input:focus { outline: none; border-color: #1e6bb8; box-shadow: 0 0 0 3px rgba(30,107,184,0.15); }
+        button { width: 100%; padding: 10px; background: #1e6bb8; color: #fff; border: none; border-radius: 6px; font-size: 16px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+        button:hover { background: #185a9c; }
+        .error { background: #fee; border: 1px solid #fcc; color: #a31d1d; padding: 10px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
+        .success { background: #efe; border: 1px solid #cfc; color: #1e5c1e; padding: 10px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
         .footer-link { margin-top: 16px; text-align: center; font-size: 14px; }
-        .footer-link a { color: #4a90d9; text-decoration: none; }
+        .footer-link a { color: #1e6bb8; text-decoration: none; }
         .footer-link a:hover { text-decoration: underline; }
     </style>
 </head>
@@ -49,11 +49,7 @@
             <button type="submit">Войти</button>
         </form>
         <p class="footer-link">
-            {#if state}
-            <a href="/register?state={state}">Создать аккаунт</a>
-            {#else}
-            <a href="/register">Создать аккаунт</a>
-            {/if}
+            <a href="/register{#if state}?state={state}{/if}">Создать аккаунт</a>
         </p>
     </div>
 </body>

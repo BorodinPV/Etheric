@@ -6,8 +6,8 @@ import com.etheric.exception.OAuthException;
 import com.etheric.repository.ClientRepository;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.core.HttpHeaders;
+import lombok.RequiredArgsConstructor;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -16,13 +16,11 @@ import java.util.Base64;
  * Shared OAuth client authentication (form params or HTTP Basic).
  */
 @ApplicationScoped
+@RequiredArgsConstructor
 public class ClientAuthService {
 
-    @Inject
-    ClientRepository clientRepository;
-
-    @Inject
-    PasswordService passwordService;
+    private final ClientRepository clientRepository;
+    private final PasswordService passwordService;
 
     public record ClientCredentials(String clientId, String clientSecret) {
     }

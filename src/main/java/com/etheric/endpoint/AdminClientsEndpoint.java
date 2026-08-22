@@ -5,10 +5,10 @@ import com.etheric.model.ClientUpdateRequest;
 import com.etheric.service.AdminClientService;
 import com.etheric.service.AdminServiceResult;
 import io.smallrye.mutiny.Uni;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Admin API for OAuth client registration ({@code /admin/clients}).
@@ -17,10 +17,10 @@ import jakarta.ws.rs.core.Response;
  */
 @Path("/admin/clients")
 @Produces(MediaType.APPLICATION_JSON)
+@RequiredArgsConstructor
 public class AdminClientsEndpoint {
 
-    @Inject
-    AdminClientService adminClientService;
+    private final AdminClientService adminClientService;
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)

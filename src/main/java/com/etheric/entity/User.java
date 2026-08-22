@@ -8,6 +8,8 @@ import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -16,6 +18,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "users")
 @RegisterForReflection
+@NoArgsConstructor
+@AllArgsConstructor
 public class User extends PanacheEntityBase {
 
     @Id
@@ -40,18 +44,4 @@ public class User extends PanacheEntityBase {
 
     @Column(name = "created_at", nullable = false)
     public OffsetDateTime createdAt;
-
-    public User() {
-    }
-
-    public User(UUID id, String username, String passwordHash, String email,
-                List<String> roles, boolean enabled, OffsetDateTime createdAt) {
-        this.id = id;
-        this.username = username;
-        this.passwordHash = passwordHash;
-        this.email = email;
-        this.roles = roles;
-        this.enabled = enabled;
-        this.createdAt = createdAt;
-    }
 }

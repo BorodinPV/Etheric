@@ -12,7 +12,7 @@
 <a class="ec-skip-link" href="#main-content">{i18n.get('nav.skipToContent')}</a>
 <div class="pf-c-page">
     <header class="pf-c-masthead">
-        <a class="pf-c-masthead__brand" href="/admin/console">
+        <a class="pf-c-masthead__brand" href="{consolePath}">
             <span class="ec-logo" aria-hidden="true">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
@@ -23,9 +23,9 @@
         </a>
         <div class="pf-c-masthead__actions">
             <nav class="pf-c-locale-switcher" aria-label="Language">
-                <a class="pf-c-locale-switcher__link {#if locale == 'en'}active{/if}" href="/admin/console/locale?lang=en">{i18n.get('lang.en')}</a>
+                <a class="pf-c-locale-switcher__link {#if locale == 'en'}active{/if}" href="{consolePath}/locale?lang=en">{i18n.get('lang.en')}</a>
                 <span class="pf-c-locale-switcher__sep">|</span>
-                <a class="pf-c-locale-switcher__link {#if locale == 'ru'}active{/if}" href="/admin/console/locale?lang=ru">{i18n.get('lang.ru')}</a>
+                <a class="pf-c-locale-switcher__link {#if locale == 'ru'}active{/if}" href="{consolePath}/locale?lang=ru">{i18n.get('lang.ru')}</a>
             </nav>
             <button class="ec-icon-button" type="button" data-theme-toggle aria-label="{i18n.get('nav.toggleTheme')}" title="{i18n.get('nav.toggleTheme')}">
                 <svg class="ec-theme-toggle__sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -51,7 +51,7 @@
                 </summary>
                 <div class="pf-c-masthead__menu">
                     <div class="pf-c-masthead__menu-header">{username}</div>
-                    <form method="post" action="/admin/console/logout">
+                    <form method="post" action="{consolePath}/logout">
                         <input type="hidden" name="csrf_token" value="{csrfToken}">
                         <button type="submit">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -69,7 +69,7 @@
     <div class="pf-c-page__main">
         <nav class="pf-c-page__sidebar" aria-label="{i18n.get('nav.manage')}">
             <div class="pf-c-nav__section-title">{i18n.get('nav.manage')}</div>
-            <a class="pf-c-nav__link {#if navSection == 'clients'}active{/if}" href="/admin/console/clients">
+            <a class="pf-c-nav__link {#if navSection == 'clients'}active{/if}" href="{consolePath}/clients">
                 <svg class="ec-nav__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect width="7" height="7" x="3" y="3" rx="1.5"/>
                     <rect width="7" height="7" x="14" y="3" rx="1.5"/>
@@ -78,7 +78,7 @@
                 </svg>
                 <span>{i18n.get('nav.clients')}</span>
             </a>
-            <a class="pf-c-nav__link {#if navSection == 'users'}active{/if}" href="/admin/console/users">
+            <a class="pf-c-nav__link {#if navSection == 'users'}active{/if}" href="{consolePath}/users">
                 <svg class="ec-nav__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
                     <circle cx="9" cy="7" r="4"/>

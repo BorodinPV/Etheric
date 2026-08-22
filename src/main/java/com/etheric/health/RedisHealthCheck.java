@@ -4,16 +4,16 @@ import io.quarkus.redis.datasource.ReactiveRedisDataSource;
 import io.smallrye.health.api.AsyncHealthCheck;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import lombok.RequiredArgsConstructor;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Readiness;
 
 @Readiness
 @ApplicationScoped
+@RequiredArgsConstructor
 public class RedisHealthCheck implements AsyncHealthCheck {
 
-    @Inject
-    ReactiveRedisDataSource redis;
+    private final ReactiveRedisDataSource redis;
 
     @Override
     public Uni<HealthCheckResponse> call() {

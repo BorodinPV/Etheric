@@ -5,6 +5,7 @@ import com.etheric.model.JwkKey;
 import com.etheric.model.JwksResponse;
 import io.smallrye.jwt.algorithm.SignatureAlgorithm;
 import io.smallrye.jwt.auth.principal.JWTParser;
+import io.smallrye.jwt.auth.principal.ParseException;
 import io.smallrye.jwt.build.Jwt;
 import io.smallrye.jwt.build.JwtClaimsBuilder;
 import jakarta.annotation.PostConstruct;
@@ -19,6 +20,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -41,11 +43,14 @@ public class JwtService {
 
     private static final Logger LOG = Logger.getLogger(JwtService.class);
 
-    @Inject
-    JWTParser jwtParser;
+    private final JWTParser jwtParser;
+    private final EthericTtlConfig ttlConfig;
 
     @Inject
-    EthericTtlConfig ttlConfig;
+    public JwtService(JWTParser jwtParser, EthericTtlConfig ttlConfig) {
+        this.jwtParser = jwtParser;
+        this.ttlConfig = ttlConfig;
+    }
 
     private RSAPublicKey publicKey;
     private RSAPrivateKey privateKey;
@@ -70,7 +75,7 @@ public class JwtService {
                     LOG.infof("RSA key pair loaded from PEM (kid=%s)", keyId);
                     return;
                 }
-            } catch (Exception e) {
+            } catch (IOException | GeneralSecurityException | IllegalArgumentException e) {
                 LOG.warnf("Failed to load RSA keys from PEM: %s", e.getMessage());
             }
         }
@@ -101,7 +106,7 @@ public class JwtService {
             privateKey = (RSAPrivateKey) keyPair.getPrivate();
             keyId = deriveKeyId(publicKey);
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("Failed to generate RSA key pair", e);
+            throw new IllegalStateException("Failed to generate RSA key pair", e);
         }
     }
 
@@ -111,11 +116,11 @@ public class JwtService {
             byte[] hash = digest.digest(key.getModulus().toByteArray());
             return Base64.getUrlEncoder().withoutPadding().encodeToString(Arrays.copyOf(hash, 16));
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 not available", e);
+            throw new IllegalStateException("SHA-256 not available", e);
         }
     }
 
-    private RSAPrivateKey loadPrivateKey(String location) throws Exception {
+    private RSAPrivateKey loadPrivateKey(String location) throws IOException, GeneralSecurityException {
         try (InputStream is = openKeyStream(location)) {
             if (is == null) {
                 return null;
@@ -126,7 +131,7 @@ public class JwtService {
         }
     }
 
-    private RSAPublicKey loadPublicKey(String location) throws Exception {
+    private RSAPublicKey loadPublicKey(String location) throws IOException, GeneralSecurityException {
         try (InputStream is = openKeyStream(location)) {
             if (is == null) {
                 return null;
@@ -239,7 +244,7 @@ public class JwtService {
         try {
             JsonWebToken jwt = jwtParser.verify(token, publicKey);
             return jwt != null && !isTokenExpired(jwt);
-        } catch (Exception e) {
+        } catch (ParseException e) {
             LOG.warnf("Token verification failed: %s", e.getMessage());
             return false;
         }
@@ -254,7 +259,7 @@ public class JwtService {
     public Optional<JsonWebToken> parseToken(String token) {
         try {
             return Optional.of(jwtParser.verify(token, publicKey));
-        } catch (Exception e) {
+        } catch (ParseException e) {
             LOG.warnf("Token parsing failed: %s", e.getMessage());
             return Optional.empty();
         }

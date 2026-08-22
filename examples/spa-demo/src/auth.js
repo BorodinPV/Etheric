@@ -69,9 +69,9 @@ function base64UrlEncode(buffer) {
   const bytes = new Uint8Array(buffer);
   let binary = '';
   bytes.forEach((b) => {
-    binary += String.fromCharCode(b);
+    binary += String.fromCodePoint(b);
   });
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 }
 
 async function sha256(input) {
@@ -283,7 +283,7 @@ export function decodeJwt(token) {
     return null;
   }
   const payload = token.split('.')[1];
-  const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+  const json = atob(payload.replaceAll('-', '+').replaceAll('_', '/'));
   return JSON.parse(json);
 }
 

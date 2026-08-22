@@ -7,7 +7,7 @@ import com.etheric.repository.AuthorizationCodeRepository;
 import com.etheric.util.OAuthRedirectBuilder;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import lombok.RequiredArgsConstructor;
 import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
@@ -17,21 +17,15 @@ import java.time.Instant;
  * Issues authorization codes (Redis primary, PostgreSQL backup).
  */
 @ApplicationScoped
+@RequiredArgsConstructor
 public class AuthorizationCodeService {
 
     private static final Logger LOG = Logger.getLogger(AuthorizationCodeService.class);
 
-    @Inject
-    CacheService cacheService;
-
-    @Inject
-    JwtService jwtService;
-
-    @Inject
-    EthericTtlConfig ttlConfig;
-
-    @Inject
-    AuthorizationCodeRepository authorizationCodeRepository;
+    private final CacheService cacheService;
+    private final JwtService jwtService;
+    private final EthericTtlConfig ttlConfig;
+    private final AuthorizationCodeRepository authorizationCodeRepository;
 
     public Uni<Response> issueCodeAndRedirect(String userId, AuthorizationRequestState requestState,
                                               String state) {

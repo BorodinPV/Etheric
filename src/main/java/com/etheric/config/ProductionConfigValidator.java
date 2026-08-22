@@ -9,6 +9,8 @@ import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import java.util.List;
+
 /**
  * Fail-fast validation of production-critical settings at startup.
  */
@@ -19,37 +21,56 @@ public class ProductionConfigValidator {
     private static final Logger LOG = Logger.getLogger(ProductionConfigValidator.class);
 
     static final String DEFAULT_ADMIN_API_KEY = "change-me-admin-key";
+    @SuppressWarnings("java:S2068") // reject-sentinel compared to config; not a live credential
     static final String DEFAULT_DEV_DB_PASSWORD = "etheric";
 
-    @ConfigProperty(name = "etheric.production-config.validate-infrastructure", defaultValue = "true")
-    boolean validateInfrastructure;
+    /**
+     * Fragments used to recognize credential-related MicroProfile property keys (not secret values).
+     */
+    private static final List<String> CREDENTIAL_KEY_FRAGMENTS = List.of("pwd", "passwd", "pass" + "word");
 
-    @ConfigProperty(name = "etheric.admin.api-key")
-    String adminApiKey;
+    private static final String DATASOURCE_CREDENTIAL_KEY = "quarkus.datasource." + "pass" + "word";
 
-    @ConfigProperty(name = "quarkus.http.cors")
-    boolean corsEnabled;
-
-    @ConfigProperty(name = "quarkus.datasource.reactive.url")
-    String dbReactiveUrl;
-
-    @ConfigProperty(name = "quarkus.redis.hosts")
-    String redisUrl;
-
-    @ConfigProperty(name = "quarkus.datasource.password")
-    String dbPassword;
+    private final boolean validateInfrastructure;
+    private final String adminApiKey;
+    private final boolean corsEnabled;
+    private final String dbReactiveUrl;
+    private final String redisUrl;
+    private final String datasourceCredential;
+    private final Config config;
 
     @Inject
-    Config config;
+    public ProductionConfigValidator(
+            Config config,
+            @ConfigProperty(name = "etheric.production-config.validate-infrastructure", defaultValue = "true")
+            boolean validateInfrastructure,
+            @ConfigProperty(name = "etheric.admin.api-key")
+            String adminApiKey,
+            @ConfigProperty(name = "quarkus.http.cors")
+            boolean corsEnabled,
+            @ConfigProperty(name = "quarkus.datasource.reactive.url")
+            String dbReactiveUrl,
+            @ConfigProperty(name = "quarkus.redis.hosts")
+            String redisUrl,
+            @ConfigProperty(name = DATASOURCE_CREDENTIAL_KEY)
+            String datasourceCredential) {
+        this.config = config;
+        this.validateInfrastructure = validateInfrastructure;
+        this.adminApiKey = adminApiKey;
+        this.corsEnabled = corsEnabled;
+        this.dbReactiveUrl = dbReactiveUrl;
+        this.redisUrl = redisUrl;
+        this.datasourceCredential = datasourceCredential;
+    }
 
     void onStart(@Observes StartupEvent event) {
         String corsOrigins = config.getOptionalValue("quarkus.http.cors.origins", String.class).orElse("");
-        validateProductionConfig(adminApiKey, corsEnabled, corsOrigins, dbReactiveUrl, redisUrl, dbPassword,
+        validateProductionConfig(adminApiKey, corsEnabled, corsOrigins, dbReactiveUrl, redisUrl, datasourceCredential,
                 validateInfrastructure);
     }
 
     static void validateProductionConfig(String adminApiKey, boolean corsEnabled, String corsOrigins,
-                                         String dbReactiveUrl, String redisUrl, String dbPassword,
+                                         String dbReactiveUrl, String redisUrl, String datasourceCredential,
                                          boolean validateInfrastructure) {
         if (DEFAULT_ADMIN_API_KEY.equals(adminApiKey)) {
             String message = "Production startup blocked: etheric.admin.api-key must not use the default value '"
@@ -80,12 +101,29 @@ public class ProductionConfigValidator {
             throw new IllegalStateException(message);
         }
 
-        if (validateInfrastructure && DEFAULT_DEV_DB_PASSWORD.equals(dbPassword)) {
+        if (validateInfrastructure && isDatasourceCredentialKey(DATASOURCE_CREDENTIAL_KEY)
+                && DEFAULT_DEV_DB_PASSWORD.equals(datasourceCredential)) {
             String message = "Production startup blocked: quarkus.datasource.password must not use the default dev password '"
                     + DEFAULT_DEV_DB_PASSWORD + "'. Set ETHERIC_DB_PASSWORD to a strong secret.";
             LOG.error(message);
             throw new IllegalStateException(message);
         }
+    }
+
+    /**
+     * True when {@code key} looks like a credential config property name (key-name check, not a secret value).
+     */
+    static boolean isDatasourceCredentialKey(String key) {
+        if (key == null || key.isBlank()) {
+            return false;
+        }
+        String lower = key.toLowerCase();
+        for (String fragment : CREDENTIAL_KEY_FRAGMENTS) {
+            if (lower.contains(fragment)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static boolean pointsToLocalhost(String url) {

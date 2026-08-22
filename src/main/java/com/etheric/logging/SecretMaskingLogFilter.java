@@ -11,11 +11,11 @@ import java.util.logging.LogRecord;
 public class SecretMaskingLogFilter implements Filter {
 
     @Override
-    public boolean isLoggable(LogRecord record) {
-        if (record.getMessage() != null) {
-            record.setMessage(SecretMasker.mask(record.getMessage()));
+    public boolean isLoggable(LogRecord logRecord) {
+        if (logRecord.getMessage() != null) {
+            logRecord.setMessage(SecretMasker.mask(logRecord.getMessage()));
         }
-        Object[] parameters = record.getParameters();
+        Object[] parameters = logRecord.getParameters();
         if (parameters != null) {
             Object[] masked = new Object[parameters.length];
             for (int i = 0; i < parameters.length; i++) {
@@ -26,7 +26,7 @@ public class SecretMaskingLogFilter implements Filter {
                     masked[i] = parameter;
                 }
             }
-            record.setParameters(masked);
+            logRecord.setParameters(masked);
         }
         return true;
     }

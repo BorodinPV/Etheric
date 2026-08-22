@@ -371,40 +371,76 @@ curl -s -X POST http://localhost:8080/revoke \
 
 ## 11. Нагрузочное тестирование (k6)
 
-Сценарий k6 в [`scripts/loadtest/`](../scripts/loadtest/) — smoke/benchmark для dev. Запуск: [`scripts/macos/loadtest.sh`](../scripts/macos/loadtest.sh) или [`scripts/windows/loadtest.ps1`](../scripts/windows/loadtest.ps1). Требуется **Docker** (образ `grafana/k6`).
+Это **не** `./mvnw test` (юнит/интеграционные тесты). Нагрузка — отдельный прогон **k6** против уже запущенного Etheric.
+
+Сценарий: [`scripts/loadtest/etheric.k6.js`](../scripts/loadtest/etheric.k6.js). Обёртки: [`scripts/macos/loadtest.sh`](../scripts/macos/loadtest.sh), [`scripts/windows/loadtest.ps1`](../scripts/windows/loadtest.ps1). Нужен **Docker Desktop** (образ `grafana/k6`).
+
+Запускайте скрипты **из корня репозитория** (`Etheric`), не из `examples/spa-demo`. Файла `scripts/windows/run.ps1` нет: Windows-скрипт называется `loadtest.ps1`.
 
 ### 11.1. Подготовка
 
-```bash
-# Терминал 1 — сервер (rate limit лучше отключить для честных цифр)
-./scripts/macos/dev.sh --no-rate-limit          # macOS/Linux
-# .\scripts\windows\dev.ps1 -DisableRateLimit   # Windows
-```
+Нужно:
+
+1. **Docker Desktop** запущен.
+2. **Etheric** слушает `http://localhost:8080` (dev seed: клиент `test-client` / `secret`, пользователь `user` / `password`).
+3. Rate limit **выключен** — иначе цифры будут про лимиты, а не про производительность.
+
+**Терминал 1 — сервер:**
 
 ```bash
-# Терминал 2 — проверка доступности
+# macOS / Linux
+./scripts/macos/dev.sh --no-rate-limit
+```
+
+```powershell
+# Windows — из корня репозитория
+.\scripts\windows\dev.ps1 -DisableRateLimit
+```
+
+Дождитесь старта. Проверка:
+
+```bash
 curl http://localhost:8080/health/live
+```
+
+```powershell
+Invoke-WebRequest http://localhost:8080/health/live -UseBasicParsing
 ```
 
 ### 11.2. Запуск
 
+**Терминал 2 — нагрузка** (Etheric уже работает). По умолчанию: сценарий `all`, 10 VU, 30 секунд.
+
 ```bash
-# Смешанный сценарий (refresh + introspect + authorize + jwks)
+# macOS / Linux — из корня репозитория
 ./scripts/macos/loadtest.sh
-
-# Только refresh — основной показатель /token
 ./scripts/macos/loadtest.sh --scenario refresh --vus 20 --duration 1m
-
-# Лёгкий baseline без OAuth
 ./scripts/macos/loadtest.sh --scenario public --vus 30 --duration 30s
 ```
 
-Windows: `.\scripts\windows\loadtest.ps1` (`-Scenario`, `-Vus`, `-Duration`, `-BaseUrl`).
+```powershell
+# Windows — из корня репозитория
+.\scripts\windows\loadtest.ps1
+.\scripts\windows\loadtest.ps1 -Scenario refresh -Vus 20 -Duration 1m
+.\scripts\windows\loadtest.ps1 -Scenario public -Vus 30 -Duration 30s
+.\scripts\windows\loadtest.ps1 -Scenario introspect
+```
 
-k6 без Docker (с хоста, если Etheric на localhost):
+| Параметр (Windows / macOS) | По умолчанию | Смысл |
+|----------------------------|--------------|--------|
+| `-Scenario` / `--scenario` | `all` | См. §11.3 |
+| `-Vus` / `--vus` | `10` | Виртуальные пользователи |
+| `-Duration` / `--duration` | `30s` | Длительность (`30s`, `1m`, …) |
+| `-BaseUrl` / `--base-url` | `http://host.docker.internal:8080` | URL Etheric **из контейнера k6** |
+
+k6 без Docker (скрипт установлен на хосте, Etheric на localhost):
 
 ```bash
 k6 run scripts/loadtest/etheric.k6.js -e BASE_URL=http://localhost:8080
+```
+
+```powershell
+k6 run scripts\loadtest\etheric.k6.js -e BASE_URL=http://localhost:8080
 ```
 
 ### 11.3. Сценарии
@@ -428,8 +464,18 @@ k6 run scripts/loadtest/etheric.k6.js -e BASE_URL=http://localhost:8080
 | `DURATION` | `30s` | Длительность |
 | `SCENARIO` | `all` | См. таблицу выше |
 | `CLIENT_ID`, `CLIENT_SECRET` | `test-client`, `secret` | Dev OAuth client |
+| `USERNAME`, `PASSWORD` | `user`, `password` | Dev-пользователь для setup OAuth flow |
 
-### 11.5. Интерпретация результатов
+### 11.5. Типичные ошибки
+
+| Симптом | Причина | Что сделать |
+|---------|---------|-------------|
+| `Имя ".\scripts\windows\run.ps1" не распознано` | Такого файла нет; команда из `spa-demo` или неверное имя | Из корня Etheric: `.\scripts\windows\loadtest.ps1` |
+| `WARN: http://localhost:8080 not reachable` | Сервер не запущен | Терминал 1: `.\scripts\windows\dev.ps1 -DisableRateLimit` |
+| `ERROR: Docker cannot reach …` | Docker не видит хост | Docker Desktop должен работать; на Windows k6 ходит на `http://host.docker.internal:8080` |
+| Много `429` | Rate limit включён | Перезапустите сервер с `-DisableRateLimit` / `--no-rate-limit` |
+
+### 11.6. Интерпретация результатов
 
 Пример хорошего dev-прогона (`SCENARIO=all`, VUs=10, 30s):
 

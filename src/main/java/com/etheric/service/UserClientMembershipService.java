@@ -6,7 +6,7 @@ import com.etheric.repository.UserClientMembershipRepository;
 import com.etheric.repository.UserRepository;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import lombok.RequiredArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -15,16 +15,12 @@ import java.util.Set;
 import java.util.UUID;
 
 @ApplicationScoped
+@RequiredArgsConstructor
 public class UserClientMembershipService {
 
-    @Inject
-    UserClientMembershipRepository membershipRepository;
-
-    @Inject
-    ClientRepository clientRepository;
-
-    @Inject
-    UserRepository userRepository;
+    private final UserClientMembershipRepository membershipRepository;
+    private final ClientRepository clientRepository;
+    private final UserRepository userRepository;
 
     public Uni<Boolean> isMember(String userId, String clientId) {
         if (userId == null || userId.isBlank()) {

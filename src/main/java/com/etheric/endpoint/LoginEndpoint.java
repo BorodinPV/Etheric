@@ -7,10 +7,10 @@ import com.etheric.repository.UserRepository;
 import com.etheric.service.AuthSessionService;
 import com.etheric.service.CacheService;
 import com.etheric.util.SessionCookieFactory;
+import io.quarkus.qute.Location;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import io.smallrye.mutiny.Uni;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.*;
 
@@ -22,23 +22,26 @@ import java.util.UUID;
 @Path("/login")
 public class LoginEndpoint {
 
-    @Inject
-    Template login;
+    private final Template login;
+    private final UserRepository userRepository;
+    private final CacheService cacheService;
+    private final SessionCookieFactory sessionCookieFactory;
+    private final AuthSessionService authSessionService;
+    private final SecurityAuditLogger securityAuditLogger;
 
-    @Inject
-    UserRepository userRepository;
-
-    @Inject
-    CacheService cacheService;
-
-    @Inject
-    SessionCookieFactory sessionCookieFactory;
-
-    @Inject
-    AuthSessionService authSessionService;
-
-    @Inject
-    SecurityAuditLogger securityAuditLogger;
+    public LoginEndpoint(@Location("login") Template login,
+                         UserRepository userRepository,
+                         CacheService cacheService,
+                         SessionCookieFactory sessionCookieFactory,
+                         AuthSessionService authSessionService,
+                         SecurityAuditLogger securityAuditLogger) {
+        this.login = login;
+        this.userRepository = userRepository;
+        this.cacheService = cacheService;
+        this.sessionCookieFactory = sessionCookieFactory;
+        this.authSessionService = authSessionService;
+        this.securityAuditLogger = securityAuditLogger;
+    }
 
     @GET
     @Produces(MediaType.TEXT_HTML)

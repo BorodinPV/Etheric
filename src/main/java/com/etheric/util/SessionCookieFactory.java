@@ -4,8 +4,8 @@ import com.etheric.model.ClientOAuthPolicy;
 import com.etheric.service.TokenPolicyService;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.core.HttpHeaders;
+import lombok.RequiredArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,10 +14,12 @@ import java.util.List;
  * Builds and parses session cookies for browser-based OAuth flows.
  */
 @ApplicationScoped
+@RequiredArgsConstructor
 public class SessionCookieFactory {
 
-    @Inject
-    TokenPolicyService tokenPolicyService;
+    private static final String COOKIE = "Cookie";
+
+    private final TokenPolicyService tokenPolicyService;
 
     public String create(String sessionId) {
         return create(sessionId, tokenPolicyService.defaultOAuthPolicy());
@@ -40,11 +42,6 @@ public class SessionCookieFactory {
                 .map(policies -> policies.stream().map(this::clear).toList());
     }
 
-    /** @deprecated Prefer {@link #cookieName(ClientOAuthPolicy)} */
-    public String cookieName() {
-        return tokenPolicyService.defaultOAuthPolicy().getSessionCookieName();
-    }
-
     public String cookieName(ClientOAuthPolicy policy) {
         return policy.getSessionCookieName();
     }
@@ -54,12 +51,12 @@ public class SessionCookieFactory {
     }
 
     public String extractSessionId(HttpHeaders headers, ClientOAuthPolicy policy) {
-        return extractSessionIdFromCookie(headers.getHeaderString("Cookie"), policy);
+        return extractSessionIdFromCookie(headers.getHeaderString(COOKIE), policy);
     }
 
     public Uni<List<String>> extractAllSessionIds(HttpHeaders headers) {
         return tokenPolicyService.knownOAuthPolicies().map(policies -> {
-            String cookieHeader = headers.getHeaderString("Cookie");
+            String cookieHeader = headers.getHeaderString(COOKIE);
             List<String> sessionIds = new ArrayList<>();
             for (ClientOAuthPolicy policy : policies) {
                 String sessionId = extractSessionIdFromCookie(cookieHeader, policy);
@@ -74,7 +71,7 @@ public class SessionCookieFactory {
     /** Returns the first session id found among all known OAuth session cookies. */
     public Uni<String> extractSessionIdAny(HttpHeaders headers) {
         return tokenPolicyService.knownOAuthPolicies().map(policies -> {
-            String cookieHeader = headers.getHeaderString("Cookie");
+            String cookieHeader = headers.getHeaderString(COOKIE);
             for (ClientOAuthPolicy policy : policies) {
                 String sessionId = extractSessionIdFromCookie(cookieHeader, policy);
                 if (sessionId != null) {

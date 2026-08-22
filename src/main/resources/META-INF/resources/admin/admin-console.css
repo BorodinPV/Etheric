@@ -18,13 +18,13 @@
     --border-strong: rgba(255, 255, 255, 0.16);
 
     --text: #ecebf2;
-    --text-muted: #9a98ac;
-    --text-subtle: #6b697d;
+    --text-muted: #c4c2d2;
+    --text-subtle: #a8a6b8;
 
     --accent: #6d5efc;
     --accent-hover: #8073ff;
     --accent-contrast: #ffffff;
-    --accent-text: #a99dff;
+    --accent-text: #c4bbff;
     --accent-soft: rgba(109, 94, 252, 0.16);
     --accent-ring: rgba(109, 94, 252, 0.5);
 
@@ -75,13 +75,13 @@
     --border-strong: rgba(17, 17, 40, 0.2);
 
     --text: #17171f;
-    --text-muted: #5e5d70;
-    --text-subtle: #8a8899;
+    --text-muted: #3f3e50;
+    --text-subtle: #4d4b5e;
 
     --accent: #5b4bf0;
     --accent-hover: #4c3ade;
     --accent-contrast: #ffffff;
-    --accent-text: #5344e2;
+    --accent-text: #4334d1;
     --accent-soft: rgba(91, 75, 240, 0.1);
     --accent-ring: rgba(91, 75, 240, 0.35);
 
@@ -1112,7 +1112,8 @@ textarea.pf-c-form-control {
 }
 
 .pf-c-description-list__description {
-    word-break: break-word;
+    overflow-wrap: anywhere;
+    word-break: normal;
     color: var(--text);
 }
 

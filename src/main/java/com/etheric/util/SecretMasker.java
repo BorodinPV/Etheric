@@ -14,7 +14,7 @@ public final class SecretMasker {
                     + "([=\"\\s:]*)([^&\\s\",;}]+)");
 
     private static final Pattern BEARER_TOKEN = Pattern.compile(
-            "(?i)(Bearer\\s+)([A-Za-z0-9\\-._~+/]+=*)");
+            "(?i)(Bearer\\s+)([A-Z0-9._~+/=-]+=*)");
 
     private static final Pattern JWT = Pattern.compile(
             "eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+");

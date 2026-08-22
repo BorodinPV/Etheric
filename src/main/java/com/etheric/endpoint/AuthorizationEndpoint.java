@@ -1,6 +1,5 @@
 package com.etheric.endpoint;
 
-import com.etheric.config.EthericCacheConfig;
 import com.etheric.config.EthericTtlConfig;
 import com.etheric.exception.OAuthError;
 import com.etheric.exception.OAuthException;
@@ -17,7 +16,6 @@ import com.etheric.util.PkceUtil;
 import com.etheric.util.ScopeUtil;
 import com.etheric.util.SessionCookieFactory;
 import io.smallrye.mutiny.Uni;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.QueryParam;
@@ -37,35 +35,27 @@ public class AuthorizationEndpoint {
 
     private static final Logger LOG = Logger.getLogger(AuthorizationEndpoint.class);
 
-    @Inject
-    ClientRepository clientRepository;
+    private final ClientRepository clientRepository;
+    private final CacheService cacheService;
+    private final AuthorizationCodeService authorizationCodeService;
+    private final EthericTtlConfig ttlConfig;
+    private final SessionCookieFactory sessionCookieFactory;
+    private final TokenPolicyService tokenPolicyService;
+    private final ConsentService consentService;
+    private final UserClientMembershipService membershipService;
+    private final SecurityAuditLogger securityAuditLogger;
 
-    @Inject
-    CacheService cacheService;
-
-    @Inject
-    AuthorizationCodeService authorizationCodeService;
-
-    @Inject
-    EthericTtlConfig ttlConfig;
-
-    @Inject
-    EthericCacheConfig cacheConfig;
-
-    @Inject
-    SessionCookieFactory sessionCookieFactory;
-
-    @Inject
-    TokenPolicyService tokenPolicyService;
-
-    @Inject
-    ConsentService consentService;
-
-    @Inject
-    UserClientMembershipService membershipService;
-
-    @Inject
-    SecurityAuditLogger securityAuditLogger;
+    public AuthorizationEndpoint(OAuthFlowSupport flow, EthericTtlConfig ttlConfig) {
+        this.clientRepository = flow.clients();
+        this.cacheService = flow.cache();
+        this.authorizationCodeService = flow.codes();
+        this.ttlConfig = ttlConfig;
+        this.sessionCookieFactory = flow.cookies();
+        this.tokenPolicyService = flow.tokenPolicy();
+        this.consentService = flow.consent();
+        this.membershipService = flow.membership();
+        this.securityAuditLogger = flow.audit();
+    }
 
     @GET
     public Uni<Response> authorize(
@@ -99,7 +89,7 @@ public class AuthorizationEndpoint {
             }
             return clientRepository.isRedirectUriValid(clientId, redirectUri);
         }).flatMap(valid -> {
-            if (!valid) {
+            if (!Boolean.TRUE.equals(valid)) {
                 return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_REQUEST, redirectUri, state));
             }
             if (scope != null && !scope.isEmpty()) {
@@ -107,7 +97,7 @@ public class AuthorizationEndpoint {
             }
             return Uni.createFrom().item(true);
         }).flatMap(scopeValid -> {
-            if (!scopeValid) {
+            if (!Boolean.TRUE.equals(scopeValid)) {
                 return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_SCOPE, redirectUri, state));
             }
             return cacheService.saveAuthorizationRequestState(state, requestState, ttlConfig.requestStateLifetime())
@@ -161,7 +151,7 @@ public class AuthorizationEndpoint {
         }
         return membershipService.isMember(requestState.getUserId(), requestState.getClientId())
                 .flatMap(member -> {
-                    if (!member) {
+                    if (!Boolean.TRUE.equals(member)) {
                         securityAuditLogger.accessDenied(
                                 requestState.getUserId(), requestState.getClientId(), "not_a_member");
                         return Uni.createFrom().failure(new OAuthException(

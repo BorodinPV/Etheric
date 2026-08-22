@@ -2,7 +2,7 @@
 <div class="pf-c-alert pf-m-danger">{error}</div>
 {/if}
 
-<form method="post" action="/admin/console/clients/create">
+<form method="post" action="{consolePath}/clients/create">
     <input type="hidden" name="csrf_token" value="{csrfToken}">
 
     <div class="ec-card">
@@ -107,7 +107,7 @@
 
         <div class="ec-form-actions">
             <button class="pf-c-button pf-m-primary" type="submit">{i18n.get('common.create')}</button>
-            <a class="pf-c-button pf-m-secondary" href="/admin/console/clients">{i18n.get('common.cancel')}</a>
+            <a class="pf-c-button pf-m-secondary" href="{consolePath}/clients">{i18n.get('common.cancel')}</a>
         </div>
     </div>
 </form>

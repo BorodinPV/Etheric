@@ -33,29 +33,33 @@ import java.util.UUID;
 @Path("/token")
 public class TokenEndpoint {
 
-    @Inject
-    CacheService cacheService;
+    private final CacheService cacheService;
+    private final JwtService jwtService;
+    private final ClientRepository clientRepository;
+    private final UserRepository userRepository;
+    private final ClientAuthService clientAuthService;
+    private final AuthorizationCodeService authorizationCodeService;
+    private final TokenPolicyService tokenPolicyService;
+    private final SecurityAuditLogger securityAuditLogger;
 
     @Inject
-    JwtService jwtService;
-
-    @Inject
-    ClientRepository clientRepository;
-
-    @Inject
-    UserRepository userRepository;
-
-    @Inject
-    ClientAuthService clientAuthService;
-
-    @Inject
-    AuthorizationCodeService authorizationCodeService;
-
-    @Inject
-    TokenPolicyService tokenPolicyService;
-
-    @Inject
-    SecurityAuditLogger securityAuditLogger;
+    public TokenEndpoint(CacheService cacheService,
+                         JwtService jwtService,
+                         ClientRepository clientRepository,
+                         UserRepository userRepository,
+                         ClientAuthService clientAuthService,
+                         AuthorizationCodeService authorizationCodeService,
+                         TokenPolicyService tokenPolicyService,
+                         SecurityAuditLogger securityAuditLogger) {
+        this.cacheService = cacheService;
+        this.jwtService = jwtService;
+        this.clientRepository = clientRepository;
+        this.userRepository = userRepository;
+        this.clientAuthService = clientAuthService;
+        this.authorizationCodeService = authorizationCodeService;
+        this.tokenPolicyService = tokenPolicyService;
+        this.securityAuditLogger = securityAuditLogger;
+    }
 
     @POST
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
@@ -102,7 +106,7 @@ public class TokenEndpoint {
                     return authUni
                             .flatMap(client -> clientRepository.isGrantTypeSupported(resolvedClientId, "authorization_code"))
                             .flatMap(supported -> {
-                                if (!supported) {
+                                if (!Boolean.TRUE.equals(supported)) {
                                     return Uni.createFrom().failure(new OAuthException(OAuthError.UNAUTHORIZED_CLIENT, null, null));
                                 }
                                 return Uni.createFrom().item(codeData);
@@ -153,7 +157,7 @@ public class TokenEndpoint {
         return clientAuthService.authenticateOptionalSecret(clientId, clientSecret, headers)
                 .flatMap(client -> clientRepository.isGrantTypeSupported(resolvedClientId, "refresh_token"))
                 .flatMap(supported -> {
-                    if (!supported) {
+                    if (!Boolean.TRUE.equals(supported)) {
                         return Uni.createFrom().failure(new OAuthException(OAuthError.UNAUTHORIZED_CLIENT, null, null));
                     }
                     return cacheService.getRefreshToken(refreshToken);
@@ -208,7 +212,7 @@ public class TokenEndpoint {
                                     oldRefreshToken, accessToken, accessData, accessTtl,
                                     refreshToken, refreshData, refreshTtl)
                                     .flatMap(rotated -> {
-                                        if (!rotated) {
+                                        if (!Boolean.TRUE.equals(rotated)) {
                                             securityAuditLogger.refreshTokenReuse(
                                                     clientId, SecurityAuditLogger.resolveClientIp(headers));
                                             return Uni.createFrom().failure(

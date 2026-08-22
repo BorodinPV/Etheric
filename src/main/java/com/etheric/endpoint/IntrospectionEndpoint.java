@@ -3,24 +3,22 @@ package com.etheric.endpoint;
 import com.etheric.service.ClientAuthService;
 import com.etheric.service.TokenIntrospectionService;
 import io.smallrye.mutiny.Uni;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import lombok.RequiredArgsConstructor;
 
 /**
  * OAuth 2.0 Token Introspection Endpoint (RFC 7662) — {@code POST /introspect}.
  */
 @Path("/introspect")
+@RequiredArgsConstructor
 public class IntrospectionEndpoint {
 
-    @Inject
-    TokenIntrospectionService tokenIntrospectionService;
-
-    @Inject
-    ClientAuthService clientAuthService;
+    private final TokenIntrospectionService tokenIntrospectionService;
+    private final ClientAuthService clientAuthService;
 
     @POST
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)

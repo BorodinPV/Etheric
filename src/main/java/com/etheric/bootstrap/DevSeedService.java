@@ -1,6 +1,7 @@
 package com.etheric.bootstrap;
 
 import com.etheric.entity.Client;
+import com.etheric.entity.ClientOAuthSettings;
 import com.etheric.entity.User;
 import com.etheric.model.ClientOAuthPolicy;
 import com.etheric.repository.ClientRepository;
@@ -10,6 +11,7 @@ import com.etheric.service.PasswordService;
 import com.etheric.service.TokenPolicyService;
 import com.etheric.service.UserClientMembershipService;
 import io.quarkus.arc.profile.IfBuildProfile;
+import io.quarkus.hibernate.reactive.panache.PanacheEntityBase;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.vertx.VertxContextSupport;
@@ -21,6 +23,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -38,6 +41,11 @@ public class DevSeedService {
     static final String DEV_CLIENT_ID = "test-client";
     static final String DEV_CLIENT_SECRET = "secret";
 
+    private static final String ADMIN = "admin";
+    @SuppressWarnings("java:S2068") // documented local-only seed credential
+    private static final String DEV_USER_PASSWORD = "password";
+    private static final String DEV_CLIENT_NAME = "Etheric Dev Application";
+
     private static final UUID DEV_CLIENT_UUID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
     private static final UUID DEV_USER_UUID = UUID.fromString("b0000000-0000-0000-0000-000000000001");
     private static final UUID DEV_ADMIN_UUID = UUID.fromString("b0000000-0000-0000-0000-000000000002");
@@ -48,24 +56,27 @@ public class DevSeedService {
             "http://localhost:5173/callback",
             "http://localhost:5173/");
 
-    @Inject
-    ClientRepository clientRepository;
+    private final ClientRepository clientRepository;
+    private final TokenPolicyService tokenPolicyService;
+    private final UserRepository userRepository;
+    private final PasswordService passwordService;
+    private final UserClientMembershipService membershipService;
+    private final String quarkusProfile;
 
     @Inject
-    TokenPolicyService tokenPolicyService;
-
-    @Inject
-    UserRepository userRepository;
-
-    @Inject
-    PasswordService passwordService;
-
-    @Inject
-    UserClientMembershipService membershipService;
-
-    @Inject
-    @ConfigProperty(name = "quarkus.profile")
-    String quarkusProfile;
+    public DevSeedService(ClientRepository clientRepository,
+                          TokenPolicyService tokenPolicyService,
+                          UserRepository userRepository,
+                          PasswordService passwordService,
+                          UserClientMembershipService membershipService,
+                          @ConfigProperty(name = "quarkus.profile") String quarkusProfile) {
+        this.clientRepository = clientRepository;
+        this.tokenPolicyService = tokenPolicyService;
+        this.userRepository = userRepository;
+        this.passwordService = passwordService;
+        this.membershipService = membershipService;
+        this.quarkusProfile = quarkusProfile;
+    }
 
     void onStart(@Observes StartupEvent event) {
         try {
@@ -84,16 +95,18 @@ public class DevSeedService {
 
     @WithTransaction
     Uni<Void> seedIfEmpty() {
-        return Client.count().flatMap(count -> {
-            if (count > 0) {
-                return Uni.createFrom().voidItem();
-            }
-            LOG.info("Seeding dev client (test-client), user, and admin into PostgreSQL");
-            return clientRepository.persistClient(createDevClient())
-                    .flatMap(c -> userRepository.persist(createDevUser()))
-                    .flatMap(u -> userRepository.persist(createAdminUser()))
-                    .replaceWithVoid();
-        });
+        return PanacheEntityBase.getSession()
+                .flatMap(session -> session.createQuery("select count(c) from Client c", Long.class).getSingleResult())
+                .flatMap(count -> {
+                    if (count > 0) {
+                        return Uni.createFrom().voidItem();
+                    }
+                    LOG.info("Seeding dev client (test-client), user, and admin into PostgreSQL");
+                    return clientRepository.persistClient(createDevClient())
+                            .flatMap(c -> userRepository.persist(createDevUser()))
+                            .flatMap(u -> userRepository.persist(createAdminUser()))
+                            .replaceWithVoid();
+                });
     }
 
     Uni<Void> normalizeDevSeedIfDev() {
@@ -110,11 +123,11 @@ public class DevSeedService {
                     if (deletedClients > 0) {
                         LOG.infof("Removed %d extra dev client(s); keeping '%s'", deletedClients, DEV_CLIENT_ID);
                     }
-                    return userRepository.deleteAllExceptUsernames("user", "admin");
+                    return userRepository.deleteAllExceptUsernames("user", ADMIN);
                 })
                 .flatMap(deletedUsers -> {
                     if (deletedUsers > 0) {
-                        LOG.infof("Removed %d extra dev user(s); keeping 'user' and 'admin'", deletedUsers);
+                        LOG.infof("Removed %d extra dev user(s); keeping 'user' and '%s'", deletedUsers, ADMIN);
                     }
                     return Uni.createFrom().voidItem();
                 });
@@ -136,8 +149,8 @@ public class DevSeedService {
                     changed = true;
                 }
             }
-            if (!"Etheric Dev Application".equals(client.clientName)) {
-                client.clientName = "Etheric Dev Application";
+            if (!DEV_CLIENT_NAME.equals(client.clientName)) {
+                client.clientName = DEV_CLIENT_NAME;
                 changed = true;
             }
             if (!passwordService.verifyPassword(DEV_CLIENT_SECRET, client.clientSecretHash)) {
@@ -166,11 +179,11 @@ public class DevSeedService {
         return userRepository.findByUsername("user").flatMap(existing -> {
             if (existing.isPresent()) {
                 User user = existing.get();
-                if (passwordService.verifyPassword("password", user.passwordHash)) {
+                if (passwordService.verifyPassword(DEV_USER_PASSWORD, user.passwordHash)) {
                     return Uni.createFrom().voidItem();
                 }
                 LOG.info("Resetting dev user password to default (user/password)");
-                user.passwordHash = passwordService.hashPassword("password");
+                user.passwordHash = passwordService.hashPassword(DEV_USER_PASSWORD);
                 return userRepository.updateUser(user);
             }
             LOG.info("Creating dev user (user/password)");
@@ -180,25 +193,25 @@ public class DevSeedService {
 
     @WithTransaction
     Uni<Void> ensureAdminUser() {
-        return userRepository.findByUsername("admin").flatMap(existing -> {
+        return userRepository.findByUsername(ADMIN).flatMap(existing -> {
             if (existing.isPresent()) {
                 User user = existing.get();
                 boolean needsRole = !AdminConsoleAuthService.hasAdminRole(user.roles);
-                boolean needsPasswordReset = !passwordService.verifyPassword("admin", user.passwordHash);
+                boolean needsPasswordReset = !passwordService.verifyPassword(ADMIN, user.passwordHash);
                 if (!needsRole && !needsPasswordReset) {
                     return Uni.createFrom().voidItem();
                 }
                 if (needsRole) {
-                    LOG.info("Adding admin role to existing user 'admin'");
-                    user.roles = List.of("admin", "user");
+                    LOG.infof("Adding admin role to existing user '%s'", ADMIN);
+                    user.roles = List.of(ADMIN, "user");
                 }
                 if (needsPasswordReset) {
-                    LOG.info("Resetting dev admin password to default (admin/admin)");
-                    user.passwordHash = passwordService.hashPassword("admin");
+                    LOG.infof("Resetting dev admin password to default (%s/%s)", ADMIN, ADMIN);
+                    user.passwordHash = passwordService.hashPassword(ADMIN);
                 }
                 return userRepository.updateUser(user);
             }
-            LOG.info("Creating dev admin user (admin/admin)");
+            LOG.infof("Creating dev admin user (%s/%s)", ADMIN, ADMIN);
             return userRepository.persist(createAdminUser()).replaceWithVoid();
         });
     }
@@ -209,7 +222,7 @@ public class DevSeedService {
                 return Uni.createFrom().voidItem();
             }
             Uni<Void> chain = membershipService.ensureMembership(userOpt.get().id, DEV_CLIENT_ID);
-            return userRepository.findByUsername("admin").flatMap(adminOpt -> {
+            return userRepository.findByUsername(ADMIN).flatMap(adminOpt -> {
                 if (adminOpt.isEmpty()) {
                     return chain;
                 }
@@ -225,18 +238,19 @@ public class DevSeedService {
                 DEV_CLIENT_UUID,
                 DEV_CLIENT_ID,
                 passwordService.hashPassword(DEV_CLIENT_SECRET),
-                "Etheric Dev Application",
+                DEV_CLIENT_NAME,
                 new ArrayList<>(DEV_CLIENT_REDIRECT_URIS),
                 List.of("openid", "profile", "email"),
                 List.of("authorization_code", "refresh_token"),
                 true,
-                OffsetDateTime.now(),
+                OffsetDateTime.now(ZoneOffset.UTC),
                 "Dev OAuth client (confidential + PKCE for SPA demo)",
-                (int) defaults.getAccessTokenLifetimeSeconds(),
-                (int) defaults.getRefreshTokenLifetimeSeconds(),
-                (int) defaults.getSessionLifetimeSeconds(),
-                defaults.getSessionCookieName(),
-                secure
+                new ClientOAuthSettings(
+                        (int) defaults.getAccessTokenLifetimeSeconds(),
+                        (int) defaults.getRefreshTokenLifetimeSeconds(),
+                        (int) defaults.getSessionLifetimeSeconds(),
+                        defaults.getSessionCookieName(),
+                        secure)
         );
     }
 
@@ -244,23 +258,23 @@ public class DevSeedService {
         return new User(
                 DEV_USER_UUID,
                 "user",
-                passwordService.hashPassword("password"),
+                passwordService.hashPassword(DEV_USER_PASSWORD),
                 "user@example.com",
                 List.of("user"),
                 true,
-                OffsetDateTime.now()
+                OffsetDateTime.now(ZoneOffset.UTC)
         );
     }
 
     private User createAdminUser() {
         return new User(
                 DEV_ADMIN_UUID,
-                "admin",
-                passwordService.hashPassword("admin"),
+                ADMIN,
+                passwordService.hashPassword(ADMIN),
                 "admin@example.com",
-                List.of("admin", "user"),
+                List.of(ADMIN, "user"),
                 true,
-                OffsetDateTime.now()
+                OffsetDateTime.now(ZoneOffset.UTC)
         );
     }
 }

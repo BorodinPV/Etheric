@@ -4,25 +4,19 @@ import com.etheric.model.UserCreateRequest;
 import com.etheric.repository.ClientRepository;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 import java.util.UUID;
 
 @ApplicationScoped
+@RequiredArgsConstructor
 public class RegistrationService {
 
-    @Inject
-    AdminUserService adminUserService;
-
-    @Inject
-    UserClientMembershipService membershipService;
-
-    @Inject
-    ClientRepository clientRepository;
-
-    @Inject
-    CacheService cacheService;
+    private final AdminUserService adminUserService;
+    private final UserClientMembershipService membershipService;
+    private final ClientRepository clientRepository;
+    private final CacheService cacheService;
 
     public Uni<RegistrationResult> register(String username, String password, String email,
                                             String state, String clientIdParam) {

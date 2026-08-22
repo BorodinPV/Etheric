@@ -5,22 +5,18 @@ import com.etheric.model.ConsentData;
 import com.etheric.repository.ConsentRepository;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 import java.util.UUID;
 
 @ApplicationScoped
+@RequiredArgsConstructor
 public class ConsentService {
 
-    @Inject
-    CacheService cacheService;
-
-    @Inject
-    ConsentRepository consentRepository;
-
-    @Inject
-    TokenPolicyService tokenPolicyService;
+    private final CacheService cacheService;
+    private final ConsentRepository consentRepository;
+    private final TokenPolicyService tokenPolicyService;
 
     public Uni<ConsentData> getConsent(String userId, String clientId) {
         if (userId == null || clientId == null || clientId.isBlank()) {
@@ -73,6 +69,6 @@ public class ConsentService {
     }
 
     private ConsentData toConsentData(UserConsent entity) {
-        return new ConsentData(entity.scopes, entity.grantedAt.toInstant().toEpochMilli());
+        return new ConsentData(entity.getScopes(), entity.grantedAt.toInstant().toEpochMilli());
     }
 }

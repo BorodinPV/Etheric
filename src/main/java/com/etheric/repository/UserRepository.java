@@ -2,6 +2,7 @@ package com.etheric.repository;
 
 import com.etheric.entity.User;
 import com.etheric.service.PasswordService;
+import io.quarkus.hibernate.reactive.panache.PanacheEntityBase;
 import io.quarkus.hibernate.reactive.panache.PanacheRepository;
 import io.quarkus.hibernate.reactive.panache.common.WithSession;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
@@ -16,8 +17,12 @@ import java.util.UUID;
 @ApplicationScoped
 public class UserRepository implements PanacheRepository<User> {
 
+    private final PasswordService passwordService;
+
     @Inject
-    PasswordService passwordService;
+    public UserRepository(PasswordService passwordService) {
+        this.passwordService = passwordService;
+    }
 
     @WithSession
     public Uni<Optional<User>> findByUsername(String username) {
@@ -60,7 +65,7 @@ public class UserRepository implements PanacheRepository<User> {
 
     @WithTransaction
     public Uni<Void> updateUser(User user) {
-        return User.getSession()
+        return PanacheEntityBase.getSession()
                 .flatMap(session -> session.merge(user))
                 .replaceWithVoid();
     }

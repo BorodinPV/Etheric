@@ -21,7 +21,7 @@ const REDIRECT_URI = __ENV.REDIRECT_URI || 'http://localhost:8080/callback';
 const USERNAME = __ENV.USERNAME || 'user';
 const PASSWORD = __ENV.PASSWORD || 'password';
 
-const VUS = Math.max(1, parseInt(__ENV.VUS || '10', 10));
+const VUS = Math.max(1, Number.parseInt(__ENV.VUS || '10', 10));
 const DURATION = __ENV.DURATION || '30s';
 const SCENARIO = (__ENV.SCENARIO || 'all').toLowerCase();
 const INTROSPECT_VUS = Math.max(1, Math.min(VUS, 5));
@@ -102,6 +102,22 @@ function extractCsrf(html) {
   return match ? match[1] : null;
 }
 
+function parseJsonBody(body) {
+  try {
+    return JSON.parse(body);
+  } catch (err) {
+    console.warn(`Failed to parse JSON body: ${err}`);
+    return null;
+  }
+}
+
+let fixtureSeq = 0;
+
+function nextFixtureId(prefix) {
+  fixtureSeq += 1;
+  return `${prefix}-${Date.now()}-${fixtureSeq}`;
+}
+
 function absoluteUrl(base, location) {
   if (!location) return null;
   if (location.startsWith('http://') || location.startsWith('https://')) {
@@ -145,13 +161,71 @@ function waitForServer() {
   }
   throw new Error(
     `Cannot reach ${BASE_URL}/health/live from k6 after 30s. ` +
-    'Start Etheric: ./scripts/macos/dev.sh --no-rate-limit  or  .\\scripts\\windows\\dev.ps1 -DisableRateLimit',
+      'Start Etheric: ./scripts/macos/dev.sh --no-rate-limit  or  .\\scripts\\windows\\dev.ps1 -DisableRateLimit',
+  );
+}
+
+function setupFormParams(jar) {
+  return {
+    redirects: 0,
+    jar,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    tags: { phase: 'setup' },
+  };
+}
+
+function isRedirectStatus(status) {
+  return status >= 300 && status < 400;
+}
+
+function followRedirect(res, jar) {
+  const next = absoluteUrl(BASE_URL, res.headers?.Location);
+  const code = parseCodeFromLocation(next);
+  if (code) {
+    return { code, res };
+  }
+  return {
+    code: null,
+    res: http.get(next, { redirects: 0, jar, tags: { phase: 'setup' } }),
+  };
+}
+
+function postLogin(res, jar, state) {
+  const csrf = extractCsrf(res.body);
+  if (!csrf) {
+    throw new Error('Login page missing CSRF token');
+  }
+  return http.post(
+    `${BASE_URL}/login`,
+    {
+      username: USERNAME,
+      password: PASSWORD,
+      state,
+      csrf_token: csrf,
+    },
+    setupFormParams(jar),
+  );
+}
+
+function postConsent(res, jar, state) {
+  const csrf = extractCsrf(res.body);
+  if (!csrf) {
+    throw new Error('Consent page missing CSRF token');
+  }
+  return http.post(
+    `${BASE_URL}/consent`,
+    {
+      action: 'approve',
+      state,
+      csrf_token: csrf,
+    },
+    setupFormParams(jar),
   );
 }
 
 function obtainTokensOnce() {
   const jar = http.cookieJar();
-  const state = `k6-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const state = nextFixtureId('k6');
   const authorizeUrl =
     `${BASE_URL}/authorize?response_type=code` +
     `&client_id=${encodeURIComponent(CLIENT_ID)}` +
@@ -166,58 +240,22 @@ function obtainTokensOnce() {
   }
 
   for (let hop = 0; hop < 15; hop += 1) {
-    if (res.status >= 300 && res.status < 400) {
-      const next = absoluteUrl(BASE_URL, res.headers.Location);
-      const code = parseCodeFromLocation(next);
-      if (code) {
-        return exchangeCode(code);
+    if (isRedirectStatus(res.status)) {
+      const followed = followRedirect(res, jar);
+      if (followed.code) {
+        return exchangeCode(followed.code);
       }
-      res = http.get(next, { redirects: 0, jar, tags: { phase: 'setup' } });
+      res = followed.res;
       continue;
     }
 
-    if (res.status === 200 && res.url && res.url.includes('/login')) {
-      const csrf = extractCsrf(res.body);
-      if (!csrf) {
-        throw new Error('Login page missing CSRF token');
-      }
-      res = http.post(
-        `${BASE_URL}/login`,
-        {
-          username: USERNAME,
-          password: PASSWORD,
-          state: state,
-          csrf_token: csrf,
-        },
-        {
-          redirects: 0,
-          jar,
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          tags: { phase: 'setup' },
-        },
-      );
+    if (res.status === 200 && res.url?.includes('/login')) {
+      res = postLogin(res, jar, state);
       continue;
     }
 
-    if (res.status === 200 && res.url && res.url.includes('/consent')) {
-      const csrf = extractCsrf(res.body);
-      if (!csrf) {
-        throw new Error('Consent page missing CSRF token');
-      }
-      res = http.post(
-        `${BASE_URL}/consent`,
-        {
-          action: 'approve',
-          state: state,
-          csrf_token: csrf,
-        },
-        {
-          redirects: 0,
-          jar,
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          tags: { phase: 'setup' },
-        },
-      );
+    if (res.status === 200 && res.url?.includes('/consent')) {
+      res = postConsent(res, jar, state);
       continue;
     }
 
@@ -301,7 +339,7 @@ function tokenForVu(data, poolKind) {
   const key = `${poolKind}:${__VU}`;
   if (!vuTokens[key]) {
     const pool = poolKind === 'refresh' ? data.refreshPool : data.introspectPool;
-    if (!pool || pool.length === 0) {
+    if (!pool?.length) {
       return { access: null, refresh: null };
     }
     const idx = (__VU - 1) % pool.length;
@@ -335,11 +373,7 @@ function isInvalidGrant(res) {
   if (res.status !== 400) {
     return false;
   }
-  try {
-    return JSON.parse(res.body).error === 'invalid_grant';
-  } catch (e) {
-    return false;
-  }
+  return parseJsonBody(res.body)?.error === 'invalid_grant';
 }
 
 function applyTokenResponse(store, res) {
@@ -367,8 +401,8 @@ export function refreshToken(data) {
       store.refresh = fresh.refresh;
       store.access = fresh.access;
       res = postRefresh(store.refresh);
-    } catch (e) {
-      // keep original error response for metrics
+    } catch (err) {
+      console.warn(`Token re-issue after invalid_grant failed: ${err}`);
     }
   }
 
@@ -378,13 +412,7 @@ export function refreshToken(data) {
 
   const ok = check(res, {
     'refresh 200': (r) => r.status === 200,
-    'rotated refresh_token': (r) => {
-      try {
-        return JSON.parse(r.body).refresh_token;
-      } catch (e) {
-        return false;
-      }
-    },
+    'rotated refresh_token': (r) => Boolean(parseJsonBody(r.body)?.refresh_token),
   });
 
   refreshErrors.add(!ok);
@@ -423,13 +451,7 @@ export function introspectToken(data) {
 
   check(res, {
     'introspect 200': (r) => r.status === 200,
-    'introspect active': (r) => {
-      try {
-        return JSON.parse(r.body).active === true;
-      } catch (e) {
-        return false;
-      }
-    },
+    'introspect active': (r) => parseJsonBody(r.body)?.active === true,
   });
 
   sleep(0.05);
@@ -462,11 +484,7 @@ export function authorizeStart() {
 }
 
 function metricRate(data, name) {
-  const metric = data.metrics[name];
-  if (!metric || !metric.values) {
-    return 0;
-  }
-  return metric.values.rate ?? 0;
+  return data.metrics[name]?.values?.rate ?? 0;
 }
 
 export function handleSummary(data) {

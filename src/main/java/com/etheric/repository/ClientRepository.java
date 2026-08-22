@@ -3,6 +3,7 @@ package com.etheric.repository;
 import com.etheric.entity.Client;
 import io.quarkus.cache.CacheInvalidateAll;
 import io.quarkus.cache.CacheResult;
+import io.quarkus.hibernate.reactive.panache.PanacheEntityBase;
 import io.quarkus.hibernate.reactive.panache.PanacheRepository;
 import io.quarkus.hibernate.reactive.panache.common.WithSession;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
@@ -78,7 +79,7 @@ public class ClientRepository implements PanacheRepository<Client> {
     @WithTransaction
     @CacheInvalidateAll(cacheName = "clients")
     public Uni<Void> updateClient(Client client) {
-        return Client.getSession()
+        return PanacheEntityBase.getSession()
                 .flatMap(session -> session.merge(client))
                 .replaceWithVoid();
     }

@@ -1,5 +1,5 @@
 <div class="pf-c-tabs">
-    <a class="pf-c-tabs__link {#if activeTab == 'settings'}active{/if}" href="/admin/console/clients/{clientId}/settings">{i18n.get('tab.settings')}</a>
-    <a class="pf-c-tabs__link {#if activeTab == 'credentials'}active{/if}" href="/admin/console/clients/{clientId}/credentials">{i18n.get('tab.credentials')}</a>
-    <a class="pf-c-tabs__link {#if activeTab == 'users'}active{/if}" href="/admin/console/clients/{clientId}/users">{i18n.get('tab.users')}</a>
+    <a class="pf-c-tabs__link {#if activeTab == 'settings'}active{/if}" href="{consolePath}/clients/{clientId}/settings">{i18n.get('tab.settings')}</a>
+    <a class="pf-c-tabs__link {#if activeTab == 'credentials'}active{/if}" href="{consolePath}/clients/{clientId}/credentials">{i18n.get('tab.credentials')}</a>
+    <a class="pf-c-tabs__link {#if activeTab == 'users'}active{/if}" href="{consolePath}/clients/{clientId}/users">{i18n.get('tab.users')}</a>
 </div>
