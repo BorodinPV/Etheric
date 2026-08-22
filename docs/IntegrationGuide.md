@@ -371,36 +371,35 @@ curl -s -X POST http://localhost:8080/revoke \
 
 ## 11. Нагрузочное тестирование (k6)
 
-Скрипт в [`scripts/loadtest/`](../scripts/loadtest/) — smoke/benchmark для dev. Требуется **Docker** (образ `grafana/k6`).
+Сценарий k6 в [`scripts/loadtest/`](../scripts/loadtest/) — smoke/benchmark для dev. Запуск: [`scripts/macos/loadtest.sh`](../scripts/macos/loadtest.sh) или [`scripts/windows/loadtest.ps1`](../scripts/windows/loadtest.ps1). Требуется **Docker** (образ `grafana/k6`).
 
 ### 11.1. Подготовка
 
-```powershell
+```bash
 # Терминал 1 — сервер (rate limit лучше отключить для честных цифр)
-.\scripts\dev.ps1 -DisableRateLimit
+./scripts/macos/dev.sh --no-rate-limit          # macOS/Linux
+# .\scripts\windows\dev.ps1 -DisableRateLimit   # Windows
 ```
 
-```powershell
+```bash
 # Терминал 2 — проверка доступности
 curl http://localhost:8080/health/live
 ```
 
-Linux/macOS: `./scripts/dev.sh --no-rate-limit`
-
 ### 11.2. Запуск
 
-```powershell
+```bash
 # Смешанный сценарий (refresh + introspect + authorize + jwks)
-.\scripts\loadtest\run.ps1
+./scripts/macos/loadtest.sh
 
 # Только refresh — основной показатель /token
-.\scripts\loadtest\run.ps1 -Scenario refresh -Vus 20 -Duration 1m
+./scripts/macos/loadtest.sh --scenario refresh --vus 20 --duration 1m
 
 # Лёгкий baseline без OAuth
-.\scripts\loadtest\run.ps1 -Scenario public -Vus 30 -Duration 30s
+./scripts/macos/loadtest.sh --scenario public --vus 30 --duration 30s
 ```
 
-Linux/macOS: `./scripts/loadtest/run.sh` (env: `VUS`, `DURATION`, `SCENARIO`, `BASE_URL`).
+Windows: `.\scripts\windows\loadtest.ps1` (`-Scenario`, `-Vus`, `-Duration`, `-BaseUrl`).
 
 k6 без Docker (с хоста, если Etheric на localhost):
 
@@ -463,5 +462,7 @@ k6 run scripts/loadtest/etheric.k6.js -e BASE_URL=http://localhost:8080
 |----------|------------|
 | [README.md](../README.md) | Запуск, конфигурация, Admin API, production |
 | [Etheric.md](Etheric.md) | Архитектура, статус реализации |
-| [scripts/loadtest/](../scripts/loadtest/) | k6 load test |
+| [scripts/loadtest/](../scripts/loadtest/) | k6-сценарий (`etheric.k6.js`) |
+| [scripts/macos/](../scripts/macos/) | Запуск и load test (macOS/Linux) |
+| [scripts/windows/](../scripts/windows/) | Запуск и load test (Windows) |
 | [.env.example](../.env.example) | Переменные окружения для deployment |

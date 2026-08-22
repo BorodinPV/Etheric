@@ -15,7 +15,7 @@ OAuth 2.0 / OIDC **Authorization Server** на Quarkus: Authorization Code + PKC
 
 ```bash
 ./mvnw -Pdev quarkus:dev          # Linux/macOS
-.\scripts\dev.ps1                 # Windows
+.\scripts\windows\dev.ps1         # Windows
 ```
 
 Профиль `-Pdev` поднимает `docker compose up -d --wait` автоматически. Сервер: **http://localhost:8080**
@@ -57,9 +57,14 @@ JSON Admin API (`/admin/clients`, `/admin/users`) — заголовок `X-Admi
 
 React/Vite public client (PKCE): [examples/spa-demo](examples/spa-demo).
 
+```bash
+./scripts/macos/dev.sh           # терминал 1 — macOS/Linux
+./scripts/macos/spa-demo.sh      # терминал 2 → http://localhost:5173
+```
+
 ```powershell
-.\scripts\dev.ps1          # терминал 1
-.\scripts\spa-demo.ps1     # терминал 2 → http://localhost:5173
+.\scripts\windows\dev.ps1          # терминал 1 — Windows
+.\scripts\windows\spa-demo.ps1     # терминал 2 → http://localhost:5173
 ```
 
 Вход: `user` / `password`. Dashboard: introspection, refresh, logout с revoke.

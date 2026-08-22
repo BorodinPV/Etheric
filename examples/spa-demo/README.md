@@ -11,23 +11,31 @@ Minimal React + Vite single-page application demonstrating **Authorization Code 
 
 Из **корня репозитория**:
 
-```powershell
-# Terminal 1 — Etheric
-.\scripts\dev.ps1
+```bash
+# Terminal 1 — Etheric (macOS/Linux)
+./scripts/macos/dev.sh
+```
+
+```bash
+# Terminal 2 — SPA demo (macOS/Linux)
+./scripts/macos/spa-demo.sh
 ```
 
 ```powershell
-# Terminal 2 — SPA demo
-.\scripts\spa-demo.ps1
+# Terminal 1 — Etheric (Windows)
+.\scripts\windows\dev.ps1
 ```
 
-Или вручную из `examples/spa-demo` (используйте `npm.cmd`, если PowerShell блокирует `npm`):
-
 ```powershell
-npm.cmd install
-npm.cmd approve-scripts --allow-scripts-pending   # if npm warns about esbuild scripts
-npm.cmd install
-npm.cmd run dev
+# Terminal 2 — SPA demo (Windows)
+.\scripts\windows\spa-demo.ps1
+```
+
+Или вручную из `examples/spa-demo` (на Windows используйте `npm.cmd`, если PowerShell блокирует `npm`):
+
+```bash
+npm install
+npm run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173).

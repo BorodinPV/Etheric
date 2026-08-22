@@ -1,6 +1,6 @@
 # Run SPA demo (uses npm.cmd to avoid PowerShell execution policy issues).
 $ErrorActionPreference = "Stop"
-Set-Location (Join-Path $PSScriptRoot "..\examples\spa-demo")
+Set-Location (Join-Path $PSScriptRoot "..\..\examples\spa-demo")
 
 $npm = Join-Path $env:ProgramFiles "nodejs\npm.cmd"
 if (-not (Test-Path $npm)) {

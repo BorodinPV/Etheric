@@ -1,15 +1,15 @@
 # Start local PostgreSQL + Redis, then run Quarkus in dev mode.
 #
 # Usage:
-#   .\scripts\dev.ps1
-#   .\scripts\dev.ps1 -DisableRateLimit
-#   .\scripts\dev.ps1 "-Detheric.rate-limit.enabled=false"
+#   .\scripts\windows\dev.ps1
+#   .\scripts\windows\dev.ps1 -DisableRateLimit
+#   .\scripts\windows\dev.ps1 "-Detheric.rate-limit.enabled=false"
 param(
     [switch]$DisableRateLimit
 )
 
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot\..
+Set-Location $PSScriptRoot\..\..
 
 docker compose up -d --wait
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

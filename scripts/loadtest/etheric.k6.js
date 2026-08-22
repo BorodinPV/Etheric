@@ -3,7 +3,9 @@
  *
  * Prerequisites:
  *   - Etheric running (dev seed: test-client / secret, user / password)
- *   - Disable rate limit: .\scripts\dev.ps1 -DisableRateLimit
+ *   - Disable rate limit:
+ *       ./scripts/macos/dev.sh --no-rate-limit
+ *       .\scripts\windows\dev.ps1 -DisableRateLimit
  *
  * Env: BASE_URL, VUS, DURATION, SCENARIO=all|refresh|introspect|public|authorize
  */
@@ -143,7 +145,7 @@ function waitForServer() {
   }
   throw new Error(
     `Cannot reach ${BASE_URL}/health/live from k6 after 30s. ` +
-    'Start Etheric: .\\scripts\\dev.ps1 -DisableRateLimit',
+    'Start Etheric: ./scripts/macos/dev.sh --no-rate-limit  or  .\\scripts\\windows\\dev.ps1 -DisableRateLimit',
   );
 }
 
@@ -491,8 +493,9 @@ export function handleSummary(data) {
     `    authorize     : ${(metricRate(data, 'http_req_failed{endpoint:authorize}') * 100).toFixed(2)}%`,
     `    jwks          : ${(metricRate(data, 'http_req_failed{endpoint:jwks}') * 100).toFixed(2)}%`,
     '',
-    'Tip: .\\scripts\\dev.ps1 -DisableRateLimit',
-    '      For cleaner refresh metrics: -Scenario refresh',
+    'Tip: ./scripts/macos/dev.sh --no-rate-limit',
+    '     .\\scripts\\windows\\dev.ps1 -DisableRateLimit',
+    '      For cleaner refresh metrics: --scenario refresh',
     '',
   ];
 
