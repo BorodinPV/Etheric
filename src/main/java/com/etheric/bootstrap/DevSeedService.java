@@ -30,7 +30,7 @@ import java.util.UUID;
 
 /**
  * Seeds dev/test data when PostgreSQL tables are empty (after Flyway).
- * Dev profile also normalizes DB to exactly one client and two users (user + admin).
+ * Dev profile also normalizes DB to the two demo clients and two users (user + admin).
  */
 @ApplicationScoped
 @IfBuildProfile(anyOf = {"dev", "test"})
@@ -40,13 +40,18 @@ public class DevSeedService {
 
     static final String DEV_CLIENT_ID = "test-client";
     static final String DEV_CLIENT_SECRET = "secret";
+    static final String CONFIDENTIAL_CLIENT_ID = "confidential-demo";
+    @SuppressWarnings("java:S2068") // documented local-only seed credential
+    static final String CONFIDENTIAL_CLIENT_SECRET = "confidential-secret";
 
     private static final String ADMIN = "admin";
     @SuppressWarnings("java:S2068") // documented local-only seed credential
     private static final String DEV_USER_PASSWORD = "password";
     private static final String DEV_CLIENT_NAME = "Etheric Dev Application";
+    private static final String CONFIDENTIAL_CLIENT_NAME = "Etheric Confidential Demo";
 
     private static final UUID DEV_CLIENT_UUID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
+    private static final UUID CONFIDENTIAL_CLIENT_UUID = UUID.fromString("a0000000-0000-0000-0000-000000000002");
     private static final UUID DEV_USER_UUID = UUID.fromString("b0000000-0000-0000-0000-000000000001");
     private static final UUID DEV_ADMIN_UUID = UUID.fromString("b0000000-0000-0000-0000-000000000002");
 
@@ -55,6 +60,10 @@ public class DevSeedService {
             "http://localhost:3000/callback",
             "http://localhost:5173/callback",
             "http://localhost:5173/");
+
+    private static final List<String> CONFIDENTIAL_CLIENT_REDIRECT_URIS = List.of(
+            "http://localhost:5174/callback",
+            "http://localhost:5174/");
 
     private final ClientRepository clientRepository;
     private final TokenPolicyService tokenPolicyService;
@@ -84,6 +93,7 @@ public class DevSeedService {
                     seedIfEmpty()
                             .chain(v -> normalizeDevSeedIfDev())
                             .chain(v -> ensureDevClient())
+                            .chain(v -> ensureConfidentialClient())
                             .chain(v -> ensureDevUser())
                             .chain(v -> ensureAdminUser())
                             .chain(v -> ensureDevMemberships()));
@@ -101,8 +111,9 @@ public class DevSeedService {
                     if (count > 0) {
                         return Uni.createFrom().voidItem();
                     }
-                    LOG.info("Seeding dev client (test-client), user, and admin into PostgreSQL");
+                    LOG.info("Seeding demo clients (test-client, confidential-demo), user, and admin");
                     return clientRepository.persistClient(createDevClient())
+                            .flatMap(c -> clientRepository.persistClient(createConfidentialClient()))
                             .flatMap(c -> userRepository.persist(createDevUser()))
                             .flatMap(u -> userRepository.persist(createAdminUser()))
                             .replaceWithVoid();
@@ -118,10 +129,11 @@ public class DevSeedService {
 
     @WithTransaction
     Uni<Void> normalizeDevSeed() {
-        return clientRepository.deleteAllExceptClientId(DEV_CLIENT_ID)
+        return clientRepository.deleteAllExceptClientIds(List.of(DEV_CLIENT_ID, CONFIDENTIAL_CLIENT_ID))
                 .flatMap(deletedClients -> {
                     if (deletedClients > 0) {
-                        LOG.infof("Removed %d extra dev client(s); keeping '%s'", deletedClients, DEV_CLIENT_ID);
+                        LOG.infof("Removed %d extra dev client(s); keeping '%s' and '%s'",
+                                deletedClients, DEV_CLIENT_ID, CONFIDENTIAL_CLIENT_ID);
                     }
                     return userRepository.deleteAllExceptUsernames("user", ADMIN);
                 })
@@ -175,6 +187,44 @@ public class DevSeedService {
     }
 
     @WithTransaction
+    Uni<Void> ensureConfidentialClient() {
+        return clientRepository.findByClientId(CONFIDENTIAL_CLIENT_ID).flatMap(existing -> {
+            if (existing.isEmpty()) {
+                LOG.info("Creating confidential demo client (confidential-demo)");
+                return clientRepository.persistClient(createConfidentialClient()).replaceWithVoid();
+            }
+            Client client = existing.get();
+            boolean changed = false;
+            List<String> uris = new ArrayList<>(client.redirectUris);
+            for (String uri : CONFIDENTIAL_CLIENT_REDIRECT_URIS) {
+                if (!uris.contains(uri)) {
+                    uris.add(uri);
+                    changed = true;
+                }
+            }
+            if (!CONFIDENTIAL_CLIENT_NAME.equals(client.clientName)) {
+                client.clientName = CONFIDENTIAL_CLIENT_NAME;
+                changed = true;
+            }
+            if (!passwordService.verifyPassword(CONFIDENTIAL_CLIENT_SECRET, client.clientSecretHash)) {
+                LOG.info("Resetting confidential demo client secret to default");
+                client.clientSecretHash = passwordService.hashPassword(CONFIDENTIAL_CLIENT_SECRET);
+                changed = true;
+            }
+            boolean expectedSecure = !"dev".equals(quarkusProfile);
+            if (client.sessionCookieSecure != expectedSecure) {
+                client.sessionCookieSecure = expectedSecure;
+                changed = true;
+            }
+            if (!changed) {
+                return Uni.createFrom().voidItem();
+            }
+            client.redirectUris = uris;
+            return clientRepository.updateClient(client);
+        });
+    }
+
+    @WithTransaction
     Uni<Void> ensureDevUser() {
         return userRepository.findByUsername("user").flatMap(existing -> {
             if (existing.isPresent()) {
@@ -217,18 +267,23 @@ public class DevSeedService {
     }
 
     Uni<Void> ensureDevMemberships() {
-        return userRepository.findByUsername("user").flatMap(userOpt -> {
-            if (userOpt.isEmpty()) {
-                return Uni.createFrom().voidItem();
-            }
-            Uni<Void> chain = membershipService.ensureMembership(userOpt.get().id, DEV_CLIENT_ID);
-            return userRepository.findByUsername(ADMIN).flatMap(adminOpt -> {
-                if (adminOpt.isEmpty()) {
+        return userRepository.findByUsername("user").flatMap(userOpt ->
+                userRepository.findByUsername(ADMIN).flatMap(adminOpt -> {
+                    Uni<Void> chain = Uni.createFrom().voidItem();
+                    if (userOpt.isPresent()) {
+                        UUID userId = userOpt.get().id;
+                        chain = chain
+                                .chain(() -> membershipService.ensureMembership(userId, DEV_CLIENT_ID))
+                                .chain(() -> membershipService.ensureMembership(userId, CONFIDENTIAL_CLIENT_ID));
+                    }
+                    if (adminOpt.isPresent()) {
+                        UUID adminId = adminOpt.get().id;
+                        chain = chain
+                                .chain(() -> membershipService.ensureMembership(adminId, DEV_CLIENT_ID))
+                                .chain(() -> membershipService.ensureMembership(adminId, CONFIDENTIAL_CLIENT_ID));
+                    }
                     return chain;
-                }
-                return chain.chain(v -> membershipService.ensureMembership(adminOpt.get().id, DEV_CLIENT_ID));
-            });
-        });
+                }));
     }
 
     private Client createDevClient() {
@@ -244,7 +299,30 @@ public class DevSeedService {
                 List.of("authorization_code", "refresh_token"),
                 true,
                 OffsetDateTime.now(ZoneOffset.UTC),
-                "Dev OAuth client (confidential + PKCE for SPA demo)",
+                "Dev OAuth client (SPA demo uses PKCE without sending the secret from the browser)",
+                new ClientOAuthSettings(
+                        (int) defaults.getAccessTokenLifetimeSeconds(),
+                        (int) defaults.getRefreshTokenLifetimeSeconds(),
+                        (int) defaults.getSessionLifetimeSeconds(),
+                        defaults.getSessionCookieName(),
+                        secure)
+        );
+    }
+
+    private Client createConfidentialClient() {
+        ClientOAuthPolicy defaults = tokenPolicyService.defaultOAuthPolicy();
+        boolean secure = !"dev".equals(quarkusProfile);
+        return new Client(
+                CONFIDENTIAL_CLIENT_UUID,
+                CONFIDENTIAL_CLIENT_ID,
+                passwordService.hashPassword(CONFIDENTIAL_CLIENT_SECRET),
+                CONFIDENTIAL_CLIENT_NAME,
+                new ArrayList<>(CONFIDENTIAL_CLIENT_REDIRECT_URIS),
+                List.of("openid", "profile", "email"),
+                List.of("authorization_code", "refresh_token"),
+                true,
+                OffsetDateTime.now(ZoneOffset.UTC),
+                "Confidential demo client — client_secret stays on the Node BFF",
                 new ClientOAuthSettings(
                         (int) defaults.getAccessTokenLifetimeSeconds(),
                         (int) defaults.getRefreshTokenLifetimeSeconds(),

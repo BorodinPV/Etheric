@@ -16,6 +16,14 @@ class ClientRepositoryTest {
     ClientRepository clientRepository;
 
     @Test
+    void findByClientId_confidentialDemo() {
+        var client = await(() -> clientRepository.findByClientId("confidential-demo"));
+        assertTrue(client.isPresent());
+        assertEquals("confidential-demo", client.get().clientId);
+        assertTrue(client.get().redirectUris.contains("http://localhost:5174/callback"));
+    }
+
+    @Test
     void findByClientId_existingClient() {
         var client = await(() -> clientRepository.findByClientId("test-client"));
         assertTrue(client.isPresent());

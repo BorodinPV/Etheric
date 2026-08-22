@@ -92,6 +92,15 @@ public class ClientRepository implements PanacheRepository<Client> {
     @WithTransaction
     @CacheInvalidateAll(cacheName = "clients")
     public Uni<Long> deleteAllExceptClientId(String clientId) {
-        return delete("clientId <> ?1", clientId);
+        return deleteAllExceptClientIds(List.of(clientId));
+    }
+
+    @WithTransaction
+    @CacheInvalidateAll(cacheName = "clients")
+    public Uni<Long> deleteAllExceptClientIds(List<String> clientIds) {
+        if (clientIds == null || clientIds.isEmpty()) {
+            return Uni.createFrom().item(0L);
+        }
+        return delete("clientId not in ?1", clientIds);
     }
 }

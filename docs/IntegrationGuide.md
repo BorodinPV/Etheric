@@ -19,6 +19,25 @@ Etheric реализует **Authorization Code Grant** ([RFC 6749](https://www.
 
 Базовый URL сервера в dev: `http://localhost:8080`
 
+### 1.1. Готовые демо
+
+| Демо | URL | Клиент | Как хранится секрет |
+|------|-----|--------|---------------------|
+| [SPA + PKCE](../examples/spa-demo) | http://localhost:5173 | `test-client` | Секрет **не** используется в браузере; вход через PKCE |
+| [Confidential BFF](../examples/confidential-demo) | http://localhost:5174 | `confidential-demo` | `confidential-secret` только в Node-процессе BFF |
+
+Запуск (из корня репозитория, Etheric уже на `:8080`):
+
+```powershell
+.\scripts\windows\spa-demo.ps1
+.\scripts\windows\confidential-demo.ps1
+```
+
+```bash
+./scripts/macos/spa-demo.sh
+./scripts/macos/confidential-demo.sh
+```
+
 ---
 
 ## 2. Регистрация клиента
@@ -302,7 +321,7 @@ GET /logout?redirect_uri={optional}
 
 1. **Всегда используйте `state`** — проверяйте совпадение при callback.
 2. **PKCE** — обязателен для public clients (SPA, native apps).
-3. **`client_secret`** — только на server-side; никогда в браузере или mobile bundle.
+3. **`client_secret`** — только на server-side; никогда в браузере или mobile bundle. Рабочий пример: [confidential-demo](../examples/confidential-demo).
 4. **HTTPS** — все redirect URI и token requests только по TLS в production.
 5. **Короткий TTL access token** — используйте refresh для продления сессии.
 6. **JWKS caching** — кешируйте ключи, но учитывайте будущую ротацию ключей.
@@ -312,7 +331,7 @@ GET /logout?redirect_uri={optional}
 
 ## 10. Пример полного потока (curl)
 
-### Confidential client (`test-client`)
+### Confidential client (`confidential-demo` или `test-client` без PKCE)
 
 ```bash
 # 1. Authorize (откройте в браузере после login/consent)
@@ -510,5 +529,7 @@ k6 run scripts\loadtest\etheric.k6.js -e BASE_URL=http://localhost:8080
 | [Etheric.md](Etheric.md) | Архитектура, статус реализации |
 | [scripts/loadtest/](../scripts/loadtest/) | k6-сценарий (`etheric.k6.js`) |
 | [scripts/macos/](../scripts/macos/) | Запуск и load test (macOS/Linux) |
+| [examples/spa-demo](../examples/spa-demo) | Public client + PKCE (`:5173`) |
+| [examples/confidential-demo](../examples/confidential-demo) | Confidential BFF + `client_secret` (`:5174`) |
 | [scripts/windows/](../scripts/windows/) | Запуск и load test (Windows) |
 | [.env.example](../.env.example) | Переменные окружения для deployment |

@@ -2,6 +2,8 @@
 
 Minimal React + Vite single-page application demonstrating **Authorization Code + PKCE (S256)** against Etheric as a **public client** (no `client_secret` in the browser).
 
+For the opposite pattern — secret on a backend — see [confidential-demo](../confidential-demo) (`http://localhost:5174`).
+
 ## Prerequisites
 
 - Etheric running at `http://localhost:8080` (dev profile seeds client `test-client`)

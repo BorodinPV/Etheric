@@ -33,10 +33,11 @@ OAuth 2.0 / OIDC **Authorization Server** на Quarkus: Authorization Code + PKC
 |------------|----------|
 | OAuth-пользователь | `user` / `password` |
 | Admin Console | `admin` / `admin` (роль `admin`) |
-| OAuth-клиент | `test-client` / `secret` |
+| OAuth-клиент (SPA) | `test-client` / `secret` (секрет не уходит из браузера; вход через PKCE) |
+| OAuth-клиент (BFF) | `confidential-demo` / `confidential-secret` (секрет только на бэкенде демо) |
 | Admin API key | `dev-admin-key` (`X-Admin-Api-Key`) |
 
-> Пользователь должен быть **привязан к клиенту** (membership), иначе authorize/login вернёт `access_denied`. Dev seed привязывает `user` и `admin` к `test-client`.
+> Пользователь должен быть **привязан к клиенту** (membership), иначе authorize/login вернёт `access_denied`. Dev seed привязывает `user` и `admin` к `test-client` и `confidential-demo`.
 
 ---
 
@@ -53,21 +54,24 @@ JSON Admin API (`/admin/clients`, `/admin/users`) — заголовок `X-Admi
 
 ---
 
-## SPA Demo
+## Демо-клиенты
 
-React/Vite public client (PKCE): [examples/spa-demo](examples/spa-demo).
+Нужен запущенный Etheric (`./scripts/macos/dev.sh` или `.\scripts\windows\dev.ps1`). Вход: `user` / `password`.
+
+| Демо | URL | Тип | Секрет |
+|------|-----|-----|--------|
+| [SPA (PKCE)](examples/spa-demo) | [http://localhost:5173](http://localhost:5173) | Public client | нет в браузере |
+| [Confidential BFF](examples/confidential-demo) | [http://localhost:5174](http://localhost:5174) | Confidential client | только на Node-бэкенде |
 
 ```bash
-./scripts/macos/dev.sh           # терминал 1 — macOS/Linux
-./scripts/macos/spa-demo.sh      # терминал 2 → http://localhost:5173
+./scripts/macos/spa-demo.sh              # public + PKCE
+./scripts/macos/confidential-demo.sh     # BFF + client_secret
 ```
 
 ```powershell
-.\scripts\windows\dev.ps1          # терминал 1 — Windows
-.\scripts\windows\spa-demo.ps1     # терминал 2 → http://localhost:5173
+.\scripts\windows\spa-demo.ps1
+.\scripts\windows\confidential-demo.ps1
 ```
-
-Вход: `user` / `password`. Dashboard: introspection, refresh, logout с revoke.
 
 ---
 
