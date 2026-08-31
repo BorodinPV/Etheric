@@ -67,6 +67,17 @@
         </div>
 
         <div class="pf-c-form__group">
+            <label class="pf-c-form__label pf-c-form__label--with-hint" for="token_endpoint_auth_method">
+                <span>{i18n.get('client.settings.tokenEndpointAuthMethod')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.client.tokenEndpointAuthMethod') /}
+            </label>
+            <select class="pf-c-form-control" id="token_endpoint_auth_method" name="token_endpoint_auth_method">
+                <option value="client_secret_basic" {#if client.tokenEndpointAuthMethod == 'client_secret_basic'}selected{/if}>{i18n.get('client.settings.authMethodConfidential')}</option>
+                <option value="none" {#if client.tokenEndpointAuthMethod == 'none'}selected{/if}>{i18n.get('client.settings.authMethodPublic')}</option>
+            </select>
+        </div>
+
+        <div class="pf-c-form__group">
             <label class="pf-c-form__label pf-c-form__label--with-hint" for="client_description">
                 <span>{i18n.get('common.description')}</span>
                 {#include admin/console/field-hint text=i18n.get('hint.common.description') /}

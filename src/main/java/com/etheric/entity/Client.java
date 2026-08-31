@@ -46,6 +46,9 @@ public class Client extends PanacheEntityBase {
     @Column(name = "enabled", nullable = false)
     public boolean enabled;
 
+    @Column(name = "token_endpoint_auth_method", nullable = false)
+    public String tokenEndpointAuthMethod;
+
     @Column(name = "created_at", nullable = false)
     public OffsetDateTime createdAt;
 
@@ -84,6 +87,7 @@ public class Client extends PanacheEntityBase {
         this.scopes = scopes;
         this.grantTypes = grantTypes;
         this.enabled = enabled;
+        this.tokenEndpointAuthMethod = "client_secret_basic";
         this.createdAt = createdAt;
         this.clientDescription = clientDescription;
         this.accessTokenLifetimeSeconds = settings.accessTokenLifetimeSeconds();

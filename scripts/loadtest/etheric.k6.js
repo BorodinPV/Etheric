@@ -2,8 +2,9 @@
  * Etheric load test (k6)
  *
  * Prerequisites:
- *   - Etheric running (dev seed: test-client / secret, user / password)
+ *   - Etheric running (dev seed: test-client is a public client using PKCE)
  *   - Disable rate limit:
+ *       ./scripts/linux/dev.sh --no-rate-limit
  *       ./scripts/macos/dev.sh --no-rate-limit
  *       .\scripts\windows\dev.ps1 -DisableRateLimit
  *
@@ -13,6 +14,8 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
+import { sha256 } from 'k6/crypto';
+import { b64encode } from 'k6/encoding';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 const CLIENT_ID = __ENV.CLIENT_ID || 'test-client';
@@ -178,6 +181,27 @@ function isRedirectStatus(status) {
   return status >= 300 && status < 400;
 }
 
+// --- PKCE helpers (S256) ---
+
+function generateVerifier() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+  let v = '';
+  for (let i = 0; i < 64; i += 1) {
+    v += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return v;
+}
+
+function s256Challenge(verifier) {
+  const hash = sha256(verifier, 'binary');
+  return b64encode(hash, 'binary')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+// ---
+
 function followRedirect(res, jar) {
   const next = absoluteUrl(BASE_URL, res.headers?.Location);
   const code = parseCodeFromLocation(next);
@@ -226,12 +250,16 @@ function postConsent(res, jar, state) {
 function obtainTokensOnce() {
   const jar = http.cookieJar();
   const state = nextFixtureId('k6');
+  const verifier = generateVerifier();
+  const challenge = s256Challenge(verifier);
   const authorizeUrl =
     `${BASE_URL}/authorize?response_type=code` +
     `&client_id=${encodeURIComponent(CLIENT_ID)}` +
     `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
     `&state=${encodeURIComponent(state)}` +
-    `&scope=openid&scope=profile`;
+    `&scope=openid&scope=profile` +
+    `&code_challenge=${encodeURIComponent(challenge)}` +
+    `&code_challenge_method=S256`;
 
   let res = http.get(authorizeUrl, { redirects: 0, jar, tags: { phase: 'setup' }, timeout: '15s' });
 
@@ -243,7 +271,7 @@ function obtainTokensOnce() {
     if (isRedirectStatus(res.status)) {
       const followed = followRedirect(res, jar);
       if (followed.code) {
-        return exchangeCode(followed.code);
+        return exchangeCode(followed.code, verifier);
       }
       res = followed.res;
       continue;
@@ -281,7 +309,7 @@ function obtainTokens() {
   throw lastError;
 }
 
-function exchangeCode(code) {
+function exchangeCode(code, codeVerifier) {
   const res = http.post(
     `${BASE_URL}/token`,
     {
@@ -289,7 +317,7 @@ function exchangeCode(code) {
       code: code,
       redirect_uri: REDIRECT_URI,
       client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
+      code_verifier: codeVerifier,
     },
     {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

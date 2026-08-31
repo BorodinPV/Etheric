@@ -51,4 +51,7 @@ public class ClientRegistrationResponse {
 
     @JsonProperty("session_cookie_secure")
     private boolean sessionCookieSecure;
+
+    @JsonProperty("token_endpoint_auth_method")
+    private String tokenEndpointAuthMethod;
 }

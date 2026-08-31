@@ -54,22 +54,8 @@ public class ClientAuthService {
         return authenticate(creds.clientId(), creds.clientSecret());
     }
 
-    public Uni<Client> authenticateOptionalSecret(String formClientId, String formClientSecret,
-                                                  HttpHeaders headers) {
-        ClientCredentials creds = resolveCredentials(formClientId, formClientSecret, headers);
-        if (creds.clientId() == null) {
-            return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_CLIENT, 401));
-        }
-        if (creds.clientSecret() != null && !creds.clientSecret().isBlank()) {
-            return authenticate(creds.clientId(), creds.clientSecret());
-        }
-        return clientRepository.findByClientId(creds.clientId()).flatMap(opt -> {
-            if (opt.isEmpty() || !opt.get().enabled) {
-                return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_CLIENT, 401));
-            }
-            return Uni.createFrom().item(opt.get());
-        });
-    }
+    public static final String AUTH_METHOD_CLIENT_SECRET_BASIC = "client_secret_basic";
+    public static final String AUTH_METHOD_NONE = "none";
 
     public Uni<Client> authenticate(String clientId, String clientSecret) {
         return clientRepository.findByClientId(clientId).flatMap(opt -> {
@@ -78,6 +64,49 @@ public class ClientAuthService {
             }
             Client client = opt.get();
             if (!passwordService.verifyPassword(clientSecret, client.clientSecretHash)) {
+                return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_CLIENT, 401));
+            }
+            return Uni.createFrom().item(client);
+        });
+    }
+
+    public boolean isPublicClient(Client client) {
+        return client != null && AUTH_METHOD_NONE.equals(client.tokenEndpointAuthMethod);
+    }
+
+    /**
+     * Authenticates a client to the token endpoint based on its configured token endpoint
+     * authentication method.
+     * <p>
+     * Confidential clients ({@code client_secret_basic}) must always present and verify their
+     * secret. Public clients ({@code none}) authenticate without a secret — they must satisfy
+     * PKCE for the authorization_code grant, otherwise they fail like an unauthenticated client.
+     *
+     * @param pkceSatisfied whether the request carries a valid PKCE proof (only meaningful for public
+     *                      clients; confidential clients authenticate via secret). Pass {@code true}
+     *                      for the refresh_token grant, where a public client is bound via its token.
+     */
+    public Uni<Client> authenticateForTokenEndpoint(String formClientId, String formClientSecret,
+                                                    HttpHeaders headers, boolean pkceSatisfied) {
+        ClientCredentials creds = resolveCredentials(formClientId, formClientSecret, headers);
+        if (creds.clientId() == null) {
+            return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_CLIENT, 401));
+        }
+        return clientRepository.findByClientId(creds.clientId()).flatMap(opt -> {
+            if (opt.isEmpty() || !opt.get().enabled) {
+                return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_CLIENT, 401));
+            }
+            Client client = opt.get();
+            if (isPublicClient(client)) {
+                if (pkceSatisfied) {
+                    return Uni.createFrom().item(client);
+                }
+                return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_CLIENT, 401));
+            }
+            if (creds.clientSecret() == null || creds.clientSecret().isBlank()) {
+                return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_CLIENT, 401));
+            }
+            if (!passwordService.verifyPassword(creds.clientSecret(), client.clientSecretHash)) {
                 return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_CLIENT, 401));
             }
             return Uni.createFrom().item(client);

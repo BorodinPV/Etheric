@@ -100,10 +100,12 @@ public class TokenEndpoint {
 
         return cacheService.getAuthorizationCode(code)
                 .flatMap(codeData -> {
-                    Uni<Client> authUni = hasPkceChallenge(codeData)
-                            ? clientAuthService.authenticateOptionalSecret(clientId, clientSecret, headers)
-                            : clientAuthService.authenticateRequired(clientId, clientSecret, headers);
-                    return authUni
+                    if (codeData == null) {
+                        return Uni.createFrom().failure(new OAuthException(OAuthError.INVALID_GRANT, null, null));
+                    }
+                    boolean pkceSatisfied = hasPkceChallenge(codeData);
+                    return clientAuthService.authenticateForTokenEndpoint(
+                                    clientId, clientSecret, headers, pkceSatisfied)
                             .flatMap(client -> clientRepository.isGrantTypeSupported(resolvedClientId, "authorization_code"))
                             .flatMap(supported -> {
                                 if (!Boolean.TRUE.equals(supported)) {
@@ -154,7 +156,7 @@ public class TokenEndpoint {
         }
         String resolvedClientId = creds.clientId();
 
-        return clientAuthService.authenticateOptionalSecret(clientId, clientSecret, headers)
+        return clientAuthService.authenticateForTokenEndpoint(clientId, clientSecret, headers, true)
                 .flatMap(client -> clientRepository.isGrantTypeSupported(resolvedClientId, "refresh_token"))
                 .flatMap(supported -> {
                     if (!Boolean.TRUE.equals(supported)) {

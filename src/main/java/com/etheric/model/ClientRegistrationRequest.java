@@ -44,4 +44,8 @@ public class ClientRegistrationRequest {
 
     @JsonProperty("session_cookie_secure")
     private Boolean sessionCookieSecure;
+
+    /** OAuth token endpoint auth method: client_secret_basic (default) or none (public/PKCE). */
+    @JsonProperty("token_endpoint_auth_method")
+    private String tokenEndpointAuthMethod;
 }

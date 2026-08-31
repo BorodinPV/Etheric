@@ -51,6 +51,12 @@ public class AdminClientService {
             return Uni.createFrom().item(invalidRequest(oauthSettings.error()));
         }
 
+        String authMethod = resolveAuthMethod(request.getTokenEndpointAuthMethod());
+        if (authMethod == null) {
+            return Uni.createFrom().item(invalidRequest(
+                    "token_endpoint_auth_method must be 'client_secret_basic' or 'none'"));
+        }
+
         String clientId = request.getClientId();
         if (clientId == null || clientId.isBlank()) {
             clientId = "client-" + UUID.randomUUID();
@@ -78,6 +84,7 @@ public class AdminClientService {
                     oauthSettings.sessionLifetimeSeconds(),
                     oauthSettings.sessionCookieName(),
                     oauthSettings.sessionCookieSecure());
+            client.tokenEndpointAuthMethod = authMethod;
 
             return clientRepository.persistClient(client)
                     .map(saved -> AdminServiceResult.ok(toResponse(saved, plaintextSecret)));
@@ -110,7 +117,15 @@ public class AdminClientService {
             if (oauthSettings.error() != null) {
                 return Uni.createFrom().item(invalidRequest(oauthSettings.error()));
             }
+            String authMethod = resolveAuthMethod(request.getTokenEndpointAuthMethod());
+            if (request.getTokenEndpointAuthMethod() != null && authMethod == null) {
+                return Uni.createFrom().item(invalidRequest(
+                        "token_endpoint_auth_method must be 'client_secret_basic' or 'none'"));
+            }
             applyUpdate(client, request, oauthSettings);
+            if (authMethod != null) {
+                client.tokenEndpointAuthMethod = authMethod;
+            }
             return clientRepository.updateClient(client)
                     .flatMap(ignored -> clientRepository.findByClientId(clientId))
                     .map(updated -> AdminServiceResult.ok(toResponse(updated.orElseThrow(), null)));
@@ -148,7 +163,8 @@ public class AdminClientService {
                 client.clientId, plaintextSecret, client.clientName, client.redirectUris,
                 client.scopes, client.grantTypes, client.enabled, client.clientDescription,
                 client.accessTokenLifetimeSeconds, client.refreshTokenLifetimeSeconds,
-                client.sessionLifetimeSeconds, client.sessionCookieName, client.sessionCookieSecure);
+                client.sessionLifetimeSeconds, client.sessionCookieName, client.sessionCookieSecure,
+                client.tokenEndpointAuthMethod);
     }
 
     private static AdminServiceResult<ClientRegistrationResponse> validateRegisterRequest(
@@ -198,7 +214,8 @@ public class AdminClientService {
                 && request.getRefreshTokenLifetimeSeconds() == null
                 && request.getSessionLifetimeSeconds() == null
                 && request.getSessionCookieName() == null
-                && request.getSessionCookieSecure() == null;
+                && request.getSessionCookieSecure() == null
+                && request.getTokenEndpointAuthMethod() == null;
     }
 
     private static AdminServiceResult<ClientRegistrationResponse> validateUpdateRedirectUris(
@@ -255,6 +272,18 @@ public class AdminClientService {
 
     private static List<String> copyOrDefault(List<String> values, List<String> defaults) {
         return (values == null || values.isEmpty()) ? defaults : List.copyOf(values);
+    }
+
+    private static String resolveAuthMethod(String value) {
+        if (value == null || value.isBlank()) {
+            return ClientAuthService.AUTH_METHOD_CLIENT_SECRET_BASIC;
+        }
+        String trimmed = value.trim();
+        if (ClientAuthService.AUTH_METHOD_CLIENT_SECRET_BASIC.equals(trimmed)
+                || ClientAuthService.AUTH_METHOD_NONE.equals(trimmed)) {
+            return trimmed;
+        }
+        return null;
     }
 
     private static <T> AdminServiceResult<T> invalidRequest(String description) {

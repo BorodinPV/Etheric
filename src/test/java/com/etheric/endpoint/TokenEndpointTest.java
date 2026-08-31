@@ -108,7 +108,7 @@ class TokenEndpointTest {
     void token_authCode_validCode_returnsTokens() {
         String code = "valid-test-code";
         awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid", "profile"), null, null, null
+            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid", "profile"), PKCE_CHALLENGE, "S256", null
         ), 600));
 
         given()
@@ -117,7 +117,7 @@ class TokenEndpointTest {
             .formParam("code", code)
             .formParam("redirect_uri", "http://localhost:8080/callback")
             .formParam("client_id", "test-client")
-            .formParam("client_secret", "secret")
+            .formParam("code_verifier", PKCE_VERIFIER)
         .when()
             .post("/token")
         .then()
@@ -136,7 +136,7 @@ class TokenEndpointTest {
     void token_authCode_withoutOpenidScope_noIdToken() {
         String code = "no-openid-code";
         awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("profile"), null, null, null
+            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("profile"), PKCE_CHALLENGE, "S256", null
         ), 600));
 
         given()
@@ -145,7 +145,7 @@ class TokenEndpointTest {
             .formParam("code", code)
             .formParam("redirect_uri", "http://localhost:8080/callback")
             .formParam("client_id", "test-client")
-            .formParam("client_secret", "secret")
+            .formParam("code_verifier", PKCE_VERIFIER)
         .when()
             .post("/token")
         .then()
@@ -159,7 +159,7 @@ class TokenEndpointTest {
         String code = "openid-nonce-code";
         awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
             "test-client", TEST_USER_ID, "http://localhost:8080/callback",
-            List.of("openid", "email"), null, null, "test-nonce-123"
+            List.of("openid", "email"), PKCE_CHALLENGE, "S256", "test-nonce-123"
         ), 600));
 
         String idToken = given()
@@ -168,7 +168,7 @@ class TokenEndpointTest {
             .formParam("code", code)
             .formParam("redirect_uri", "http://localhost:8080/callback")
             .formParam("client_id", "test-client")
-            .formParam("client_secret", "secret")
+            .formParam("code_verifier", PKCE_VERIFIER)
         .when()
             .post("/token")
         .then()
@@ -186,7 +186,7 @@ class TokenEndpointTest {
     void token_authCode_codeOneTimeUse_codeDeletedAfterUse() {
         String code = "one-time-code";
         awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid"), null, null, null
+            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid"), PKCE_CHALLENGE, "S256", null
         ), 600));
 
         given()
@@ -195,7 +195,7 @@ class TokenEndpointTest {
             .formParam("code", code)
             .formParam("redirect_uri", "http://localhost:8080/callback")
             .formParam("client_id", "test-client")
-            .formParam("client_secret", "secret")
+            .formParam("code_verifier", PKCE_VERIFIER)
         .when()
             .post("/token")
         .then()
@@ -207,7 +207,7 @@ class TokenEndpointTest {
             .formParam("code", code)
             .formParam("redirect_uri", "http://localhost:8080/callback")
             .formParam("client_id", "test-client")
-            .formParam("client_secret", "secret")
+            .formParam("code_verifier", PKCE_VERIFIER)
         .when()
             .post("/token")
         .then()
@@ -219,7 +219,7 @@ class TokenEndpointTest {
     void token_authCode_wrongRedirectUri_returnsInvalidGrant() {
         String code = "wrong-redirect-code";
         awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid"), null, null, null
+            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid"), PKCE_CHALLENGE, "S256", null
         ), 600));
 
         given()
@@ -228,7 +228,7 @@ class TokenEndpointTest {
             .formParam("code", code)
             .formParam("redirect_uri", "http://evil.com/callback")
             .formParam("client_id", "test-client")
-            .formParam("client_secret", "secret")
+            .formParam("code_verifier", PKCE_VERIFIER)
         .when()
             .post("/token")
         .then()
@@ -240,7 +240,7 @@ class TokenEndpointTest {
     void token_authCode_withoutScope_usesCodeScopes() {
         String code = "default-scope-code";
         awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid", "email"), null, null, null
+            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid", "email"), PKCE_CHALLENGE, "S256", null
         ), 600));
 
         given()
@@ -249,7 +249,7 @@ class TokenEndpointTest {
             .formParam("code", code)
             .formParam("redirect_uri", "http://localhost:8080/callback")
             .formParam("client_id", "test-client")
-            .formParam("client_secret", "secret")
+            .formParam("code_verifier", PKCE_VERIFIER)
         .when()
             .post("/token")
         .then()
@@ -261,7 +261,7 @@ class TokenEndpointTest {
     void token_authCode_scopeNotSubset_returnsInvalidScope() {
         String code = "invalid-scope-code";
         awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid"), null, null, null
+            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid"), PKCE_CHALLENGE, "S256", null
         ), 600));
 
         given()
@@ -270,7 +270,7 @@ class TokenEndpointTest {
             .formParam("code", code)
             .formParam("redirect_uri", "http://localhost:8080/callback")
             .formParam("client_id", "test-client")
-            .formParam("client_secret", "secret")
+            .formParam("code_verifier", PKCE_VERIFIER)
             .formParam("scope", "openid email")
         .when()
             .post("/token")
@@ -404,15 +404,15 @@ class TokenEndpointTest {
     void token_authCode_invalidClientSecret_returnsInvalidClient() {
         String code = "invalid-secret-code";
         awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid"), null, null, null
+            CONFIDENTIAL_ID, TEST_USER_ID, CONFIDENTIAL_REDIRECT, List.of("openid"), null, null, null
         ), 600));
 
         given()
             .contentType(ContentType.URLENC)
             .formParam("grant_type", "authorization_code")
             .formParam("code", code)
-            .formParam("redirect_uri", "http://localhost:8080/callback")
-            .formParam("client_id", "test-client")
+            .formParam("redirect_uri", CONFIDENTIAL_REDIRECT)
+            .formParam("client_id", CONFIDENTIAL_ID)
             .formParam("client_secret", "wrong-secret")
         .when()
             .post("/token")
@@ -425,17 +425,18 @@ class TokenEndpointTest {
     void token_authCode_basicAuth_returnsTokens() {
         String code = "basic-auth-code";
         awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid"), null, null, null
+            CONFIDENTIAL_ID, TEST_USER_ID, CONFIDENTIAL_REDIRECT, List.of("openid"), null, null, null
         ), 600));
 
-        String basic = Base64.getEncoder().encodeToString("test-client:secret".getBytes(StandardCharsets.UTF_8));
+        String basic = Base64.getEncoder().encodeToString(
+            (CONFIDENTIAL_ID + ":" + CONFIDENTIAL_SECRET).getBytes(StandardCharsets.UTF_8));
 
         given()
             .contentType(ContentType.URLENC)
             .header("Authorization", "Basic " + basic)
             .formParam("grant_type", "authorization_code")
             .formParam("code", code)
-            .formParam("redirect_uri", "http://localhost:8080/callback")
+            .formParam("redirect_uri", CONFIDENTIAL_REDIRECT)
         .when()
             .post("/token")
         .then()
@@ -468,7 +469,7 @@ class TokenEndpointTest {
     void token_authCode_wrongClientIdForCode_returnsInvalidGrant() {
         String code = "mismatch-client-code";
         awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "other-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid"), null, null, null
+            "other-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid"), PKCE_CHALLENGE, "S256", null
         ), 600));
 
         given()
@@ -477,7 +478,7 @@ class TokenEndpointTest {
             .formParam("code", code)
             .formParam("redirect_uri", "http://localhost:8080/callback")
             .formParam("client_id", "test-client")
-            .formParam("client_secret", "secret")
+            .formParam("code_verifier", PKCE_VERIFIER)
         .when()
             .post("/token")
         .then()
@@ -525,6 +526,10 @@ class TokenEndpointTest {
 
     private static final String REDIRECT_URI = "http://localhost:8080/callback";
     private static final String PKCE_VERIFIER = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG";
+    private static final String PKCE_CHALLENGE = PkceUtil.s256Challenge(PKCE_VERIFIER);
+    private static final String CONFIDENTIAL_ID = "confidential-demo";
+    private static final String CONFIDENTIAL_SECRET = "confidential-secret";
+    private static final String CONFIDENTIAL_REDIRECT = "http://localhost:5174/callback";
 
     @Test
     void token_authCode_pkceWithoutSecret_succeeds() {
@@ -698,19 +703,19 @@ class TokenEndpointTest {
     }
 
     @Test
-    void token_authCode_withoutPkce_doesNotRequireVerifier() {
+    void token_authCode_confidentialClient_doesNotRequireVerifier() {
         String code = "no-pkce-code";
         awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid"), null, null, null
+            CONFIDENTIAL_ID, TEST_USER_ID, CONFIDENTIAL_REDIRECT, List.of("openid"), null, null, null
         ), 600));
 
         given()
             .contentType(ContentType.URLENC)
             .formParam("grant_type", "authorization_code")
             .formParam("code", code)
-            .formParam("redirect_uri", "http://localhost:8080/callback")
-            .formParam("client_id", "test-client")
-            .formParam("client_secret", "secret")
+            .formParam("redirect_uri", CONFIDENTIAL_REDIRECT)
+            .formParam("client_id", CONFIDENTIAL_ID)
+            .formParam("client_secret", CONFIDENTIAL_SECRET)
         .when()
             .post("/token")
         .then()
@@ -722,7 +727,7 @@ class TokenEndpointTest {
     void token_authCode_tokensAreStoredInCache() {
         String code = "cache-storage-code";
         awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
-            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid"), null, null, null
+            "test-client", TEST_USER_ID, "http://localhost:8080/callback", List.of("openid"), PKCE_CHALLENGE, "S256", null
         ), 600));
 
         String body = given()
@@ -731,7 +736,7 @@ class TokenEndpointTest {
             .formParam("code", code)
             .formParam("redirect_uri", "http://localhost:8080/callback")
             .formParam("client_id", "test-client")
-            .formParam("client_secret", "secret")
+            .formParam("code_verifier", PKCE_VERIFIER)
         .when()
             .post("/token")
         .then()

@@ -7,6 +7,7 @@ import com.etheric.model.ClientOAuthPolicy;
 import com.etheric.repository.ClientRepository;
 import com.etheric.repository.UserRepository;
 import com.etheric.service.AdminConsoleAuthService;
+import com.etheric.service.ClientAuthService;
 import com.etheric.service.PasswordService;
 import com.etheric.service.TokenPolicyService;
 import com.etheric.service.UserClientMembershipService;
@@ -177,6 +178,10 @@ public class DevSeedService {
                 LOG.infof("Applying %s profile: session_cookie_secure=%s on test-client",
                         quarkusProfile, expectedSecure);
             }
+            if (!ClientAuthService.AUTH_METHOD_NONE.equals(client.tokenEndpointAuthMethod)) {
+                client.tokenEndpointAuthMethod = ClientAuthService.AUTH_METHOD_NONE;
+                changed = true;
+            }
             if (!changed) {
                 return Uni.createFrom().voidItem();
             }
@@ -214,6 +219,10 @@ public class DevSeedService {
             boolean expectedSecure = !"dev".equals(quarkusProfile);
             if (client.sessionCookieSecure != expectedSecure) {
                 client.sessionCookieSecure = expectedSecure;
+                changed = true;
+            }
+            if (!ClientAuthService.AUTH_METHOD_CLIENT_SECRET_BASIC.equals(client.tokenEndpointAuthMethod)) {
+                client.tokenEndpointAuthMethod = ClientAuthService.AUTH_METHOD_CLIENT_SECRET_BASIC;
                 changed = true;
             }
             if (!changed) {
@@ -289,7 +298,7 @@ public class DevSeedService {
     private Client createDevClient() {
         ClientOAuthPolicy defaults = tokenPolicyService.defaultOAuthPolicy();
         boolean secure = !"dev".equals(quarkusProfile);
-        return new Client(
+        Client client = new Client(
                 DEV_CLIENT_UUID,
                 DEV_CLIENT_ID,
                 passwordService.hashPassword(DEV_CLIENT_SECRET),
@@ -307,12 +316,14 @@ public class DevSeedService {
                         defaults.getSessionCookieName(),
                         secure)
         );
+        client.tokenEndpointAuthMethod = ClientAuthService.AUTH_METHOD_NONE;
+        return client;
     }
 
     private Client createConfidentialClient() {
         ClientOAuthPolicy defaults = tokenPolicyService.defaultOAuthPolicy();
         boolean secure = !"dev".equals(quarkusProfile);
-        return new Client(
+        Client client = new Client(
                 CONFIDENTIAL_CLIENT_UUID,
                 CONFIDENTIAL_CLIENT_ID,
                 passwordService.hashPassword(CONFIDENTIAL_CLIENT_SECRET),
@@ -330,6 +341,8 @@ public class DevSeedService {
                         defaults.getSessionCookieName(),
                         secure)
         );
+        client.tokenEndpointAuthMethod = ClientAuthService.AUTH_METHOD_CLIENT_SECRET_BASIC;
+        return client;
     }
 
     private User createDevUser() {

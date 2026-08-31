@@ -240,6 +240,7 @@ public class AdminConsoleEndpoint {
             @FormParam("session_lifetime_seconds") String sessionLifetimeSeconds,
             @FormParam("session_cookie_name") String sessionCookieName,
             @FormParam("session_cookie_secure") String sessionCookieSecure,
+            @FormParam("token_endpoint_auth_method") String tokenEndpointAuthMethod,
             @Context ContainerRequestContext requestContext) {
 
         PageRenderContext ctx = pageContext(requestContext);
@@ -260,6 +261,7 @@ public class AdminConsoleEndpoint {
         request.setSessionLifetimeSeconds(parseRequiredPositiveInt(sessionLifetimeSeconds));
         request.setSessionCookieName(blankToNull(sessionCookieName));
         request.setSessionCookieSecure("on".equals(sessionCookieSecure));
+        request.setTokenEndpointAuthMethod(blankToNull(tokenEndpointAuthMethod));
 
         return adminClientService.register(request).flatMap(result -> {
             if (!result.isSuccess()) {
@@ -317,6 +319,7 @@ public class AdminConsoleEndpoint {
             @FormParam("session_lifetime_seconds") String sessionLifetimeSeconds,
             @FormParam("session_cookie_name") String sessionCookieName,
             @FormParam("session_cookie_secure") String sessionCookieSecure,
+            @FormParam("token_endpoint_auth_method") String tokenEndpointAuthMethod,
             @Context ContainerRequestContext requestContext) {
 
         PageRenderContext ctx = pageContext(requestContext);
@@ -336,6 +339,7 @@ public class AdminConsoleEndpoint {
         request.setSessionLifetimeSeconds(parseRequiredPositiveInt(sessionLifetimeSeconds));
         request.setSessionCookieName(blankToNull(sessionCookieName));
         request.setSessionCookieSecure("on".equals(sessionCookieSecure));
+        request.setTokenEndpointAuthMethod(blankToNull(tokenEndpointAuthMethod));
 
         return adminClientService.update(clientId, request).flatMap(result -> {
             if (!result.isSuccess()) {
