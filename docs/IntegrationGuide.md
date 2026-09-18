@@ -25,6 +25,7 @@ Etheric реализует **Authorization Code Grant** ([RFC 6749](https://www.
 |------|-----|--------|---------------------|
 | [SPA + PKCE](../examples/spa-demo) | http://localhost:5173 | `test-client` | Секрет **не** используется в браузере; вход через PKCE |
 | [Confidential BFF](../examples/confidential-demo) | http://localhost:5174 | `confidential-demo` | `confidential-secret` только в Node-процессе BFF |
+| Veles web | http://localhost:8090/veles/ | `veles-frontend` | Public PKCE; логин на hosted UI Etheric |
 
 Запуск (из корня репозитория, Etheric уже на `:8080`):
 
@@ -37,6 +38,24 @@ Etheric реализует **Authorization Code Grant** ([RFC 6749](https://www.
 ./scripts/macos/spa-demo.sh
 ./scripts/macos/confidential-demo.sh
 ```
+
+### 1.2. Veles web (PKCE)
+
+Веб-клиент мессенджера Veles ходит в Etheric напрямую (Authorization Code + PKCE, без password grant). Resource server Veles проверяет JWT по `iss` + JWKS Etheric; мобильный Keycloak может оставаться вторым issuer.
+
+Локально Etheric занимает `:8080`, Veles — `:8090`:
+
+```bash
+# Etheric
+./scripts/macos/dev.sh
+
+# Veles (из репозитория Veles)
+SERVER_PORT=8090 mvn spring-boot:run
+```
+
+Откройте [http://localhost:8090/veles/](http://localhost:8090/veles/). Вход `user` / `password` на странице Etheric. Dev-клиент `veles-frontend`: public, `require_membership=false`, redirect URI `http://localhost:8090/veles/index.html`.
+
+Veles принимает `iss=etheric` (значение `ETHERIC_JWT_ISSUER`) и JWKS `http://localhost:8080/.well-known/jwks.json`.
 
 ---
 

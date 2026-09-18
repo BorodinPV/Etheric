@@ -24,6 +24,16 @@ class ClientRepositoryTest {
     }
 
     @Test
+    void findByClientId_velesFrontend() {
+        var client = await(() -> clientRepository.findByClientId("veles-frontend"));
+        assertTrue(client.isPresent());
+        assertEquals("Veles Web", client.get().clientName);
+        assertEquals("none", client.get().tokenEndpointAuthMethod);
+        assertFalse(client.get().requireMembership);
+        assertTrue(client.get().redirectUris.contains("http://localhost:8090/veles/index.html"));
+    }
+
+    @Test
     void findByClientId_existingClient() {
         var client = await(() -> clientRepository.findByClientId("test-client"));
         assertTrue(client.isPresent());

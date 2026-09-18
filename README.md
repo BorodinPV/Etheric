@@ -35,9 +35,10 @@ OAuth 2.0 / OIDC **Authorization Server** на Quarkus: Authorization Code + PKC
 | Admin Console | `admin` / `admin` (роль `admin`) |
 | OAuth-клиент (SPA) | `test-client` / `secret` (секрет не уходит из браузера; вход через PKCE) |
 | OAuth-клиент (BFF) | `confidential-demo` / `confidential-secret` (секрет только на бэкенде демо) |
+| OAuth-клиент (Veles web) | `veles-frontend` (public PKCE, `require_membership=false`) |
 | Admin API key | `dev-admin-key` (`X-Admin-Api-Key`) |
 
-> По умолчанию пользователь должен быть **привязан к клиенту** (membership), иначе authorize/login вернёт `access_denied`. У клиента можно выключить `require_membership` — тогда войдёт любой enabled-пользователь. Dev seed привязывает `user` и `admin` к `test-client` и `confidential-demo`.
+> По умолчанию пользователь должен быть **привязан к клиенту** (membership), иначе authorize/login вернёт `access_denied`. У клиента можно выключить `require_membership` — тогда войдёт любой enabled-пользователь. Dev seed привязывает `user` и `admin` к `test-client` и `confidential-demo`. `veles-frontend` — public PKCE без membership (как SPA-демо).
 
 ---
 

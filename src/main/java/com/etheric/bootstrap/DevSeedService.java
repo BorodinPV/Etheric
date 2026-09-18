@@ -31,7 +31,7 @@ import java.util.UUID;
 
 /**
  * Seeds dev/test data when PostgreSQL tables are empty (after Flyway).
- * Dev profile also normalizes DB to the two demo clients and two users (user + admin).
+ * Dev profile also normalizes DB to the demo clients and two users (user + admin).
  */
 @ApplicationScoped
 @IfBuildProfile(anyOf = {"dev", "test"})
@@ -44,15 +44,20 @@ public class DevSeedService {
     static final String CONFIDENTIAL_CLIENT_ID = "confidential-demo";
     @SuppressWarnings("java:S2068") // documented local-only seed credential
     static final String CONFIDENTIAL_CLIENT_SECRET = "confidential-secret";
+    static final String VELES_FRONTEND_CLIENT_ID = "veles-frontend";
+    @SuppressWarnings("java:S2068") // public client; hash only, never presented
+    static final String VELES_FRONTEND_PLACEHOLDER_SECRET = "unused";
 
     private static final String ADMIN = "admin";
     @SuppressWarnings("java:S2068") // documented local-only seed credential
     private static final String DEV_USER_PASSWORD = "password";
     private static final String DEV_CLIENT_NAME = "Etheric Dev Application";
     private static final String CONFIDENTIAL_CLIENT_NAME = "Etheric Confidential Demo";
+    private static final String VELES_FRONTEND_CLIENT_NAME = "Veles Web";
 
     private static final UUID DEV_CLIENT_UUID = UUID.fromString("a0000000-0000-0000-0000-000000000001");
     private static final UUID CONFIDENTIAL_CLIENT_UUID = UUID.fromString("a0000000-0000-0000-0000-000000000002");
+    private static final UUID VELES_FRONTEND_CLIENT_UUID = UUID.fromString("a0000000-0000-0000-0000-000000000003");
     private static final UUID DEV_USER_UUID = UUID.fromString("b0000000-0000-0000-0000-000000000001");
     private static final UUID DEV_ADMIN_UUID = UUID.fromString("b0000000-0000-0000-0000-000000000002");
 
@@ -65,6 +70,20 @@ public class DevSeedService {
     private static final List<String> CONFIDENTIAL_CLIENT_REDIRECT_URIS = List.of(
             "http://localhost:5174/callback",
             "http://localhost:5174/");
+
+    /** Veles web is served from Spring {@code /veles} locally (port 8090) or nginx at site root. */
+    private static final List<String> VELES_FRONTEND_REDIRECT_URIS = List.of(
+            "http://localhost:8090/veles",
+            "http://localhost:8090/veles/",
+            "http://localhost:8090/veles/index.html",
+            "http://127.0.0.1:8090/veles",
+            "http://127.0.0.1:8090/veles/",
+            "http://127.0.0.1:8090/veles/index.html",
+            "http://localhost:8080/veles",
+            "http://localhost:8080/veles/",
+            "http://localhost:8080/veles/index.html",
+            "https://ring-app.ru/",
+            "https://ring-app.ru/index.html");
 
     private final ClientRepository clientRepository;
     private final TokenPolicyService tokenPolicyService;
@@ -95,6 +114,7 @@ public class DevSeedService {
                             .chain(v -> normalizeDevSeedIfDev())
                             .chain(v -> ensureDevClient())
                             .chain(v -> ensureConfidentialClient())
+                            .chain(v -> ensureVelesFrontendClient())
                             .chain(v -> ensureDevUser())
                             .chain(v -> ensureAdminUser())
                             .chain(v -> ensureDevMemberships()));
@@ -112,9 +132,10 @@ public class DevSeedService {
                     if (count > 0) {
                         return Uni.createFrom().voidItem();
                     }
-                    LOG.info("Seeding demo clients (test-client, confidential-demo), user, and admin");
+                    LOG.info("Seeding demo clients (test-client, confidential-demo, veles-frontend), user, and admin");
                     return clientRepository.persistClient(createDevClient())
                             .flatMap(c -> clientRepository.persistClient(createConfidentialClient()))
+                            .flatMap(c -> clientRepository.persistClient(createVelesFrontendClient()))
                             .flatMap(c -> userRepository.persist(createDevUser()))
                             .flatMap(u -> userRepository.persist(createAdminUser()))
                             .replaceWithVoid();
@@ -130,11 +151,12 @@ public class DevSeedService {
 
     @WithTransaction
     Uni<Void> normalizeDevSeed() {
-        return clientRepository.deleteAllExceptClientIds(List.of(DEV_CLIENT_ID, CONFIDENTIAL_CLIENT_ID))
+        return clientRepository.deleteAllExceptClientIds(
+                        List.of(DEV_CLIENT_ID, CONFIDENTIAL_CLIENT_ID, VELES_FRONTEND_CLIENT_ID))
                 .flatMap(deletedClients -> {
                     if (deletedClients > 0) {
-                        LOG.infof("Removed %d extra dev client(s); keeping '%s' and '%s'",
-                                deletedClients, DEV_CLIENT_ID, CONFIDENTIAL_CLIENT_ID);
+                        LOG.infof("Removed %d extra dev client(s); keeping '%s', '%s' and '%s'",
+                                deletedClients, DEV_CLIENT_ID, CONFIDENTIAL_CLIENT_ID, VELES_FRONTEND_CLIENT_ID);
                     }
                     return userRepository.deleteAllExceptUsernames("user", ADMIN);
                 })
@@ -236,6 +258,48 @@ public class DevSeedService {
             if (!changed) {
                 return Uni.createFrom().voidItem();
             }
+            client.redirectUris = uris;
+            return clientRepository.updateClient(client);
+        });
+    }
+
+    @WithTransaction
+    Uni<Void> ensureVelesFrontendClient() {
+        return clientRepository.findByClientId(VELES_FRONTEND_CLIENT_ID).flatMap(existing -> {
+            if (existing.isEmpty()) {
+                LOG.info("Creating Veles web client (veles-frontend)");
+                return clientRepository.persistClient(createVelesFrontendClient()).replaceWithVoid();
+            }
+            Client client = existing.get();
+            boolean changed = false;
+            List<String> uris = new ArrayList<>(client.redirectUris);
+            for (String uri : VELES_FRONTEND_REDIRECT_URIS) {
+                if (!uris.contains(uri)) {
+                    uris.add(uri);
+                    changed = true;
+                }
+            }
+            if (!VELES_FRONTEND_CLIENT_NAME.equals(client.clientName)) {
+                client.clientName = VELES_FRONTEND_CLIENT_NAME;
+                changed = true;
+            }
+            boolean expectedSecure = !"dev".equals(quarkusProfile);
+            if (client.sessionCookieSecure != expectedSecure) {
+                client.sessionCookieSecure = expectedSecure;
+                changed = true;
+            }
+            if (!ClientAuthService.AUTH_METHOD_NONE.equals(client.tokenEndpointAuthMethod)) {
+                client.tokenEndpointAuthMethod = ClientAuthService.AUTH_METHOD_NONE;
+                changed = true;
+            }
+            if (client.requireMembership) {
+                client.requireMembership = false;
+                changed = true;
+            }
+            if (!changed) {
+                return Uni.createFrom().voidItem();
+            }
+            LOG.info("Updating Veles web client (veles-frontend) redirect URIs / OAuth settings");
             client.redirectUris = uris;
             return clientRepository.updateClient(client);
         });
@@ -351,6 +415,32 @@ public class DevSeedService {
                         secure)
         );
         client.tokenEndpointAuthMethod = ClientAuthService.AUTH_METHOD_CLIENT_SECRET_BASIC;
+        return client;
+    }
+
+    private Client createVelesFrontendClient() {
+        ClientOAuthPolicy defaults = tokenPolicyService.defaultOAuthPolicy();
+        boolean secure = !"dev".equals(quarkusProfile);
+        Client client = new Client(
+                VELES_FRONTEND_CLIENT_UUID,
+                VELES_FRONTEND_CLIENT_ID,
+                passwordService.hashPassword(VELES_FRONTEND_PLACEHOLDER_SECRET),
+                VELES_FRONTEND_CLIENT_NAME,
+                new ArrayList<>(VELES_FRONTEND_REDIRECT_URIS),
+                List.of("openid", "profile", "email"),
+                List.of("authorization_code", "refresh_token"),
+                true,
+                OffsetDateTime.now(ZoneOffset.UTC),
+                "Veles web SPA: public PKCE, require_membership=false",
+                new ClientOAuthSettings(
+                        (int) defaults.getAccessTokenLifetimeSeconds(),
+                        (int) defaults.getRefreshTokenLifetimeSeconds(),
+                        (int) defaults.getSessionLifetimeSeconds(),
+                        defaults.getSessionCookieName(),
+                        secure)
+        );
+        client.tokenEndpointAuthMethod = ClientAuthService.AUTH_METHOD_NONE;
+        client.requireMembership = false;
         return client;
     }
 
