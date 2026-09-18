@@ -46,4 +46,10 @@ public class ClientUpdateRequest {
     /** OAuth token endpoint auth method: client_secret_basic or none (public/PKCE). */
     @JsonProperty("token_endpoint_auth_method")
     private String tokenEndpointAuthMethod;
+
+    /**
+     * When true, only assigned users may authorize. When false, any enabled user may.
+     */
+    @JsonProperty("require_membership")
+    private Boolean requireMembership;
 }

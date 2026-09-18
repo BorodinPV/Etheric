@@ -77,6 +77,14 @@
             </select>
         </div>
 
+        <div class="pf-c-form__group pf-c-checkbox">
+            <label class="pf-c-form__label--with-hint" for="require_membership">
+                <input type="checkbox" id="require_membership" name="require_membership" {#if client.requireMembership}checked{/if}>
+                <span>{i18n.get('client.settings.requireMembership')}</span>
+                {#include admin/console/field-hint text=i18n.get('hint.client.requireMembership') /}
+            </label>
+        </div>
+
         <div class="pf-c-form__group">
             <label class="pf-c-form__label pf-c-form__label--with-hint" for="client_description">
                 <span>{i18n.get('common.description')}</span>

@@ -149,7 +149,7 @@ public class AuthorizationEndpoint {
             return Uni.createFrom().item(Response.seeOther(
                     OAuthRedirectBuilder.build("/login", Map.of("state", state))).build());
         }
-        return membershipService.isMember(requestState.getUserId(), requestState.getClientId())
+        return membershipService.canAuthenticate(requestState.getUserId(), requestState.getClientId())
                 .flatMap(member -> {
                     if (!Boolean.TRUE.equals(member)) {
                         securityAuditLogger.accessDenied(

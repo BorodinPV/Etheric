@@ -146,7 +146,7 @@ public class AuthSessionService {
             if (requestState == null) {
                 return Uni.createFrom().item(buildLoginRedirect(newSessionId, state, "/consent", policy));
             }
-            return membershipService.isMember(userId, requestState.getClientId()).flatMap(member -> {
+            return membershipService.canAuthenticate(userId, requestState.getClientId()).flatMap(member -> {
                 if (!Boolean.TRUE.equals(member)) {
                     return Uni.createFrom().failure(new OAuthException(
                             OAuthError.ACCESS_DENIED, requestState.getRedirectUri(), state));

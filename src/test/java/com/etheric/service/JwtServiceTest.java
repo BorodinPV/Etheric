@@ -107,6 +107,30 @@ class JwtServiceTest {
     }
 
     @Test
+    void parseToken_accessTokenIncludesProfileClaimsWhenScoped() {
+        String token = jwtService.generateAccessToken(
+                "user1", List.of("user"), List.of("openid", "profile", "email"), 3600,
+                "user@example.com", "alice");
+        JsonWebToken jwt = jwtService.parseToken(token).orElseThrow();
+        assertEquals("user1", jwt.getSubject());
+        assertEquals("alice", jwt.getClaim("preferred_username"));
+        assertEquals("alice", jwt.getClaim("name"));
+        assertEquals("user@example.com", jwt.getClaim("email"));
+        assertEquals(Boolean.TRUE, jwt.getClaim("email_verified"));
+    }
+
+    @Test
+    void parseToken_accessTokenOmitsProfileClaimsWithoutScopes() {
+        String token = jwtService.generateAccessToken(
+                "user1", List.of("user"), List.of("openid"), 3600,
+                "user@example.com", "alice");
+        JsonWebToken jwt = jwtService.parseToken(token).orElseThrow();
+        assertEquals("user1", jwt.getSubject());
+        assertNull(jwt.getClaim("preferred_username"));
+        assertNull(jwt.getClaim("email"));
+    }
+
+    @Test
     void parseToken_validToken() {
         String token = jwtService.generateAccessToken("user1", List.of("user"), List.of("openid"));
         JsonWebToken jwt = jwtService.parseToken(token).orElseThrow();

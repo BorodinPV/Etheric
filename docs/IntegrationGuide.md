@@ -85,6 +85,7 @@ Content-Type: application/json
 | `redirect_uris` | Whitelist URI для редиректов после authorize/logout |
 | `scopes` | Разрешённые scope (по умолчанию `openid`, `profile`, `email`) |
 | `grant_types` | По умолчанию `authorization_code`, `refresh_token` |
+| `require_membership` | По умолчанию `true`: только назначенные пользователи. `false` — любой enabled-пользователь (first-party приложения) |
 
 ---
 
@@ -222,12 +223,13 @@ GET /.well-known/jwks.json
 |-------|----------|
 | `iss` | Issuer (`etheric.jwt.issuer`) |
 | `sub` | User id (UUID) |
-| `aud` | `client_id` |
 | `exp` / `iat` | Время истечения / выдачи |
-| `scope` | Пробел-разделённые scope |
-| `roles` | Роли пользователя из PostgreSQL |
+| `scopes` | Массив scope (`["openid","profile"]`) |
+| `groups` | Роли пользователя из PostgreSQL |
+| `preferred_username` / `name` | При scope `profile` |
+| `email` / `email_verified` | При scope `email` |
 
-При scope `profile` может присутствовать `preferred_username`.
+Access-токен **не содержит `aud`**. Привязка к клиенту хранится в Redis и отдаётся через introspection. `id_token` содержит `aud` = `client_id`.
 
 ### 5.3. ID Token (OIDC)
 

@@ -85,6 +85,7 @@ public class AdminClientService {
                     oauthSettings.sessionCookieName(),
                     oauthSettings.sessionCookieSecure());
             client.tokenEndpointAuthMethod = authMethod;
+            client.requireMembership = request.getRequireMembership() == null || request.getRequireMembership();
 
             return clientRepository.persistClient(client)
                     .map(saved -> AdminServiceResult.ok(toResponse(saved, plaintextSecret)));
@@ -126,6 +127,9 @@ public class AdminClientService {
             if (authMethod != null) {
                 client.tokenEndpointAuthMethod = authMethod;
             }
+            if (request.getRequireMembership() != null) {
+                client.requireMembership = request.getRequireMembership();
+            }
             return clientRepository.updateClient(client)
                     .flatMap(ignored -> clientRepository.findByClientId(clientId))
                     .map(updated -> AdminServiceResult.ok(toResponse(updated.orElseThrow(), null)));
@@ -164,7 +168,7 @@ public class AdminClientService {
                 client.scopes, client.grantTypes, client.enabled, client.clientDescription,
                 client.accessTokenLifetimeSeconds, client.refreshTokenLifetimeSeconds,
                 client.sessionLifetimeSeconds, client.sessionCookieName, client.sessionCookieSecure,
-                client.tokenEndpointAuthMethod);
+                client.tokenEndpointAuthMethod, client.requireMembership);
     }
 
     private static AdminServiceResult<ClientRegistrationResponse> validateRegisterRequest(
@@ -215,7 +219,8 @@ public class AdminClientService {
                 && request.getSessionLifetimeSeconds() == null
                 && request.getSessionCookieName() == null
                 && request.getSessionCookieSecure() == null
-                && request.getTokenEndpointAuthMethod() == null;
+                && request.getTokenEndpointAuthMethod() == null
+                && request.getRequireMembership() == null;
     }
 
     private static AdminServiceResult<ClientRegistrationResponse> validateUpdateRedirectUris(

@@ -52,6 +52,8 @@ Open [http://localhost:5173](http://localhost:5173).
 | Post-logout redirect | `http://localhost:5173/` |
 | Scopes | `openid`, `profile`, `email` |
 | Grant types | `authorization_code`, `refresh_token` |
+| Auth method | `none` (public / PKCE) |
+| `require_membership` | `false` — any enabled user may authorize (Veles-web analogue) |
 | Secret | `secret` in dev seed (server-side only; PKCE login does not send it from the browser) |
 
 ## CORS
@@ -71,7 +73,7 @@ In production, set `ETHERIC_CORS_ENABLED=true` and `ETHERIC_CORS_ORIGINS` to you
 1. **Login** — redirects to Etheric `/authorize` with PKCE challenge and OIDC `nonce`.
 2. **Create account** — opens Etheric `/register` for client `test-client`; after signup the user is returned to the SPA home page with `?registered=1` and can log in.
 3. **Callback** — validates `state`, exchanges `code` + `code_verifier` at `/token` (no secret), verifies `nonce` in `id_token`.
-4. **Dashboard** — shows decoded `id_token` claims; auto-introspects via **RFC 7662** `POST /introspect` (through dev BFF); **automatically refreshes** the access token 60s before expiry; **Logout** revokes tokens via **RFC 7009** `POST /revoke` (through dev BFF), clears `sessionStorage`, redirects to Etheric `/logout?redirect_uri=http://localhost:5173/`. Logout is synchronized across duplicated tabs via `localStorage`; reloading a stale tab re-validates the session server-side.
+4. **Dashboard** — shows **access token** claims (`preferred_username`, `email`, `groups`, `scopes`) the way a resource server would; also shows `id_token` claims; auto-introspects via **RFC 7662** `POST /introspect` (through dev BFF); **automatically refreshes** the access token 60s before expiry; **Logout** revokes tokens via **RFC 7009** `POST /revoke` (through dev BFF), clears `sessionStorage`, redirects to Etheric `/logout?redirect_uri=http://localhost:5173/`. Logout is synchronized across duplicated tabs via `localStorage`; reloading a stale tab re-validates the session server-side.
 
 Tokens are stored in `sessionStorage` only. Access-token refresh timing uses the OAuth `expires_in` value from `/token` (stored as `expires_at` ms), not the JWT `exp` claim — refresh is scheduled 60 seconds before that deadline.
 

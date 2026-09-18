@@ -182,6 +182,10 @@ public class DevSeedService {
                 client.tokenEndpointAuthMethod = ClientAuthService.AUTH_METHOD_NONE;
                 changed = true;
             }
+            if (client.requireMembership) {
+                client.requireMembership = false;
+                changed = true;
+            }
             if (!changed) {
                 return Uni.createFrom().voidItem();
             }
@@ -223,6 +227,10 @@ public class DevSeedService {
             }
             if (!ClientAuthService.AUTH_METHOD_CLIENT_SECRET_BASIC.equals(client.tokenEndpointAuthMethod)) {
                 client.tokenEndpointAuthMethod = ClientAuthService.AUTH_METHOD_CLIENT_SECRET_BASIC;
+                changed = true;
+            }
+            if (!client.requireMembership) {
+                client.requireMembership = true;
                 changed = true;
             }
             if (!changed) {
@@ -308,7 +316,7 @@ public class DevSeedService {
                 List.of("authorization_code", "refresh_token"),
                 true,
                 OffsetDateTime.now(ZoneOffset.UTC),
-                "Dev OAuth client (SPA demo uses PKCE without sending the secret from the browser)",
+                "Dev OAuth client (SPA demo: public PKCE, require_membership=false)",
                 new ClientOAuthSettings(
                         (int) defaults.getAccessTokenLifetimeSeconds(),
                         (int) defaults.getRefreshTokenLifetimeSeconds(),
@@ -317,6 +325,7 @@ public class DevSeedService {
                         secure)
         );
         client.tokenEndpointAuthMethod = ClientAuthService.AUTH_METHOD_NONE;
+        client.requireMembership = false;
         return client;
     }
 

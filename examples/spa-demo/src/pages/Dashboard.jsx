@@ -12,6 +12,16 @@ import {
   SessionExpiredError,
 } from '../auth';
 
+function formatClaim(value) {
+  if (value == null || value === '') {
+    return '—';
+  }
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+  return String(value);
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const refreshTimerRef = useRef(null);
@@ -148,20 +158,51 @@ export default function Dashboard() {
   return (
     <div className="card">
       <h1>Dashboard</h1>
-      <p>Signed in via Authorization Code + PKCE (public client).</p>
+      <p>
+        Public client: Authorization Code + PKCE. Seeded <code>test-client</code> has{' '}
+        <code>require_membership=false</code>, so any enabled user may sign in.
+      </p>
 
-      <dl>
-        <dt>sub</dt>
-        <dd>{idClaims.sub}</dd>
-        <dt>preferred_username</dt>
-        <dd>{idClaims.preferred_username || '—'}</dd>
-        <dt>email</dt>
-        <dd>{idClaims.email || '—'}</dd>
-        <dt>roles</dt>
-        <dd>{Array.isArray(roles) ? roles.join(', ') : '—'}</dd>
-        <dt>scope</dt>
-        <dd>{tokens.scope || '—'}</dd>
-      </dl>
+      <section className="introspection">
+        <h2>Access token (resource server)</h2>
+        <p>
+          Claims a backend like Veles reads from the Bearer JWT after JWKS validation.
+          With scopes <code>profile</code> and <code>email</code> these include username and email.
+        </p>
+        <dl>
+          <dt>sub</dt>
+          <dd>{formatClaim(accessClaims?.sub)}</dd>
+          <dt>preferred_username</dt>
+          <dd>{formatClaim(accessClaims?.preferred_username)}</dd>
+          <dt>name</dt>
+          <dd>{formatClaim(accessClaims?.name)}</dd>
+          <dt>email</dt>
+          <dd>{formatClaim(accessClaims?.email)}</dd>
+          <dt>email_verified</dt>
+          <dd>{formatClaim(accessClaims?.email_verified)}</dd>
+          <dt>groups</dt>
+          <dd>{Array.isArray(roles) ? roles.join(', ') : '—'}</dd>
+          <dt>scopes</dt>
+          <dd>{formatClaim(accessClaims?.scopes)}</dd>
+        </dl>
+      </section>
+
+      <section className="introspection">
+        <h2>ID token (OIDC client)</h2>
+        <p>Verified in the SPA: <code>nonce</code>, <code>aud</code>, <code>exp</code>.</p>
+        <dl>
+          <dt>sub</dt>
+          <dd>{idClaims.sub}</dd>
+          <dt>preferred_username</dt>
+          <dd>{idClaims.preferred_username || '—'}</dd>
+          <dt>email</dt>
+          <dd>{idClaims.email || '—'}</dd>
+          <dt>aud</dt>
+          <dd>{formatClaim(idClaims.aud)}</dd>
+          <dt>scope (token response)</dt>
+          <dd>{tokens.scope || '—'}</dd>
+        </dl>
+      </section>
 
       <section className="introspection">
         <h2>Token introspection</h2>

@@ -169,15 +169,21 @@ public class JwtService {
     }
 
     public String generateAccessToken(String userId, List<String> roles, List<String> scopes, long lifetimeSeconds) {
+        return generateAccessToken(userId, roles, scopes, lifetimeSeconds, null, null);
+    }
+
+    public String generateAccessToken(String userId, List<String> roles, List<String> scopes, long lifetimeSeconds,
+                                      String email, String username) {
         long now = System.currentTimeMillis() / 1000;
 
-        return Jwt.issuer(ttlConfig.issuer())
+        JwtClaimsBuilder builder = Jwt.issuer(ttlConfig.issuer())
                 .claim(Claims.sub, userId)
                 .claim(Claims.groups, roles)
                 .claim("scopes", scopes)
                 .issuedAt(now)
-                .expiresAt(now + lifetimeSeconds)
-                .jws().algorithm(signatureAlgorithm)
+                .expiresAt(now + lifetimeSeconds);
+        applyOidcProfileClaims(builder, scopes, email, username);
+        return builder.jws().algorithm(signatureAlgorithm)
                 .keyId(keyId)
                 .sign(privateKey);
     }
@@ -220,20 +226,26 @@ public class JwtService {
         if (nonce != null && !nonce.isBlank()) {
             builder.claim("nonce", nonce);
         }
-        if (scopes != null) {
-            if (scopes.contains("email") && email != null) {
-                builder.claim("email", email);
-                builder.claim("email_verified", true);
-            }
-            if (scopes.contains("profile") && username != null) {
-                builder.claim("preferred_username", username);
-                builder.claim("name", username);
-            }
-        }
+        applyOidcProfileClaims(builder, scopes, email, username);
 
         return builder.jws().algorithm(signatureAlgorithm)
                 .keyId(keyId)
                 .sign(privateKey);
+    }
+
+    private static void applyOidcProfileClaims(JwtClaimsBuilder builder, List<String> scopes,
+                                       String email, String username) {
+        if (scopes == null) {
+            return;
+        }
+        if (scopes.contains("email") && email != null) {
+            builder.claim("email", email);
+            builder.claim("email_verified", true);
+        }
+        if (scopes.contains("profile") && username != null) {
+            builder.claim("preferred_username", username);
+            builder.claim("name", username);
+        }
     }
 
     public String generateAuthorizationCode() {

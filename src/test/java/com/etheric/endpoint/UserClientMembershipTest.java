@@ -99,6 +99,39 @@ class UserClientMembershipTest {
     }
 
     @Test
+    void authorize_withoutMembership_whenNotRequired_continuesToConsent() {
+        String clientId = registerClient("Membership Open Client");
+        given()
+            .contentType(ContentType.JSON)
+            .header("X-Admin-Api-Key", ADMIN_KEY)
+            .body(Map.of("require_membership", false))
+        .when()
+            .put("/admin/clients/" + clientId)
+        .then()
+            .statusCode(200)
+            .body("require_membership", equalTo(false));
+
+        String sessionId = UUID.randomUUID().toString();
+        awaitVoid(cacheService.saveSession(sessionId,
+                new SessionData(TEST_USER_ID, null, System.currentTimeMillis()), 1800));
+
+        String state = UUID.randomUUID().toString();
+        given()
+            .queryParam("response_type", "code")
+            .queryParam("client_id", clientId)
+            .queryParam("redirect_uri", REDIRECT_URI)
+            .queryParam("state", state)
+            .queryParam("scope", "openid")
+            .cookie(new Cookie.Builder("SESSIONID", sessionId).build())
+            .redirects().follow(false)
+        .when()
+            .get("/authorize")
+        .then()
+            .statusCode(303)
+            .header("Location", containsString("/consent?state=" + state));
+    }
+
+    @Test
     void adminConsole_userClientAssignment_roundTrip() {
         UUID userId = await(() -> userRepository.findByUsername("user")).orElseThrow().id;
         AuthenticatedSession auth = loginAsAdmin();

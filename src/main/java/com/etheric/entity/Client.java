@@ -70,6 +70,10 @@ public class Client extends PanacheEntityBase {
     @Column(name = "session_cookie_secure", nullable = false)
     public boolean sessionCookieSecure;
 
+    /** When true, only users assigned to this client may authorize. */
+    @Column(name = "require_membership", nullable = false)
+    public boolean requireMembership = true;
+
     public Client() {
     }
 

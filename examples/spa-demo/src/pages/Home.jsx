@@ -54,6 +54,10 @@ export default function Home() {
         <code>http://localhost:8080</code>.
       </p>
       <p>No <code>client_secret</code> is used in this frontend.</p>
+      <p className="note">
+        Dev client <code>test-client</code> is public PKCE with <code>require_membership=false</code>
+        — any enabled Etheric user can authorize, not only assigned members.
+      </p>
       {registered ? (
         <p className="success">Account created. Sign in to continue.</p>
       ) : null}

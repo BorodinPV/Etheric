@@ -241,6 +241,7 @@ public class AdminConsoleEndpoint {
             @FormParam("session_cookie_name") String sessionCookieName,
             @FormParam("session_cookie_secure") String sessionCookieSecure,
             @FormParam("token_endpoint_auth_method") String tokenEndpointAuthMethod,
+            @FormParam("require_membership") String requireMembership,
             @Context ContainerRequestContext requestContext) {
 
         PageRenderContext ctx = pageContext(requestContext);
@@ -262,6 +263,7 @@ public class AdminConsoleEndpoint {
         request.setSessionCookieName(blankToNull(sessionCookieName));
         request.setSessionCookieSecure("on".equals(sessionCookieSecure));
         request.setTokenEndpointAuthMethod(blankToNull(tokenEndpointAuthMethod));
+        request.setRequireMembership("on".equals(requireMembership));
 
         return adminClientService.register(request).flatMap(result -> {
             if (!result.isSuccess()) {
@@ -320,6 +322,7 @@ public class AdminConsoleEndpoint {
             @FormParam("session_cookie_name") String sessionCookieName,
             @FormParam("session_cookie_secure") String sessionCookieSecure,
             @FormParam("token_endpoint_auth_method") String tokenEndpointAuthMethod,
+            @FormParam("require_membership") String requireMembership,
             @Context ContainerRequestContext requestContext) {
 
         PageRenderContext ctx = pageContext(requestContext);
@@ -340,6 +343,7 @@ public class AdminConsoleEndpoint {
         request.setSessionCookieName(blankToNull(sessionCookieName));
         request.setSessionCookieSecure("on".equals(sessionCookieSecure));
         request.setTokenEndpointAuthMethod(blankToNull(tokenEndpointAuthMethod));
+        request.setRequireMembership("on".equals(requireMembership));
 
         return adminClientService.update(clientId, request).flatMap(result -> {
             if (!result.isSuccess()) {

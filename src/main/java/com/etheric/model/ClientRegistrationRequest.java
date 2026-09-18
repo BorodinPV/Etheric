@@ -48,4 +48,11 @@ public class ClientRegistrationRequest {
     /** OAuth token endpoint auth method: client_secret_basic (default) or none (public/PKCE). */
     @JsonProperty("token_endpoint_auth_method")
     private String tokenEndpointAuthMethod;
+
+    /**
+     * When true (default), only users assigned to this client may authorize.
+     * When false, any enabled user may complete the OAuth flow.
+     */
+    @JsonProperty("require_membership")
+    private Boolean requireMembership;
 }

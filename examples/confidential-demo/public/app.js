@@ -34,6 +34,7 @@ function homeView(error) {
         <code>/token</code>, <code>/introspect</code> and <code>/revoke</code>.
       </p>
       <p class="note">Tokens live in an HttpOnly session cookie on the BFF — not in <code>sessionStorage</code>.</p>
+      <p class="note">This client <code>require_membership=true</code>: the user must be assigned in Admin Console. The SPA demo on :5173 is the open-client counterpart.</p>
       ${registered ? '<p class="success">Account created. Sign in to continue.</p>' : ''}
       ${oauthError ? `<p class="error">${escapeHtml(oauthError)}</p>` : ''}
       <div class="actions">
@@ -42,6 +43,16 @@ function homeView(error) {
       </div>
     </div>
   `;
+}
+
+function formatClaim(value) {
+  if (value == null || value === '') {
+    return '—';
+  }
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+  return String(value);
 }
 
 function dashboardView(session, extras = {}) {
@@ -60,15 +71,34 @@ function dashboardView(session, extras = {}) {
   return `
     <div class="card">
       <h1>Dashboard</h1>
-      <p>Signed in via Authorization Code + <code>client_secret</code> on the BFF (no PKCE, no secret in the browser).</p>
-      <dl>
-        <dt>sub</dt><dd>${escapeHtml(id.sub)}</dd>
-        <dt>preferred_username</dt><dd>${escapeHtml(id.preferred_username || '—')}</dd>
-        <dt>email</dt><dd>${escapeHtml(id.email || '—')}</dd>
-        <dt>roles</dt><dd>${escapeHtml(roles)}</dd>
-        <dt>scope</dt><dd>${escapeHtml(session.scope || '—')}</dd>
-        <dt>tokens in browser</dt><dd>${session.tokensInBrowser ? 'yes' : 'no'}</dd>
-      </dl>
+      <p>
+        Confidential BFF: Authorization Code + <code>client_secret</code> on the server.
+        Client <code>confidential-demo</code> still <strong>requires membership</strong>
+        (unlike the SPA demo).
+      </p>
+      <section class="introspection">
+        <h2>Access token (resource server)</h2>
+        <p>Decoded on the BFF from the Bearer JWT — the same claims an API validates via JWKS.</p>
+        <dl>
+          <dt>sub</dt><dd>${escapeHtml(formatClaim(access.sub))}</dd>
+          <dt>preferred_username</dt><dd>${escapeHtml(formatClaim(access.preferred_username))}</dd>
+          <dt>name</dt><dd>${escapeHtml(formatClaim(access.name))}</dd>
+          <dt>email</dt><dd>${escapeHtml(formatClaim(access.email))}</dd>
+          <dt>email_verified</dt><dd>${escapeHtml(formatClaim(access.email_verified))}</dd>
+          <dt>groups</dt><dd>${escapeHtml(roles)}</dd>
+          <dt>scopes</dt><dd>${escapeHtml(formatClaim(access.scopes))}</dd>
+        </dl>
+      </section>
+      <section class="introspection">
+        <h2>ID token (OIDC client)</h2>
+        <dl>
+          <dt>sub</dt><dd>${escapeHtml(id.sub)}</dd>
+          <dt>preferred_username</dt><dd>${escapeHtml(id.preferred_username || '—')}</dd>
+          <dt>email</dt><dd>${escapeHtml(id.email || '—')}</dd>
+          <dt>scope (token response)</dt><dd>${escapeHtml(session.scope || '—')}</dd>
+          <dt>tokens in browser</dt><dd>${session.tokensInBrowser ? 'yes' : 'no'}</dd>
+        </dl>
+      </section>
       <section class="introspection">
         <h2>Token introspection</h2>
         <p>RFC 7662 via BFF — Basic <code>${escapeHtml(session.clientId)}:****</code> is added on the server.</p>

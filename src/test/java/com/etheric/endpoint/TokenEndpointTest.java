@@ -183,6 +183,37 @@ class TokenEndpointTest {
     }
 
     @Test
+    void token_authCode_accessTokenIncludesProfileAndEmailClaims() {
+        String code = "access-profile-code";
+        awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(
+            "test-client", TEST_USER_ID, "http://localhost:8080/callback",
+            List.of("openid", "profile", "email"), PKCE_CHALLENGE, "S256", null
+        ), 600));
+
+        String accessToken = given()
+            .contentType(ContentType.URLENC)
+            .formParam("grant_type", "authorization_code")
+            .formParam("code", code)
+            .formParam("redirect_uri", "http://localhost:8080/callback")
+            .formParam("client_id", "test-client")
+            .formParam("code_verifier", PKCE_VERIFIER)
+        .when()
+            .post("/token")
+        .then()
+            .statusCode(200)
+            .body("access_token", notNullValue())
+            .extract().path("access_token");
+
+        var parsed = jwtService.parseToken(accessToken);
+        org.junit.jupiter.api.Assertions.assertTrue(parsed.isPresent());
+        org.junit.jupiter.api.Assertions.assertEquals(TEST_USER_ID, parsed.get().getSubject());
+        org.junit.jupiter.api.Assertions.assertEquals("user", parsed.get().getClaim("preferred_username"));
+        org.junit.jupiter.api.Assertions.assertEquals("user", parsed.get().getClaim("name"));
+        org.junit.jupiter.api.Assertions.assertEquals("user@example.com", parsed.get().getClaim("email"));
+        org.junit.jupiter.api.Assertions.assertEquals(Boolean.TRUE, parsed.get().getClaim("email_verified"));
+    }
+
+    @Test
     void token_authCode_codeOneTimeUse_codeDeletedAfterUse() {
         String code = "one-time-code";
         awaitVoid(cacheService.saveAuthorizationCode(code, new AuthorizationCodeData(

@@ -37,7 +37,7 @@ OAuth 2.0 / OIDC **Authorization Server** на Quarkus: Authorization Code + PKC
 | OAuth-клиент (BFF) | `confidential-demo` / `confidential-secret` (секрет только на бэкенде демо) |
 | Admin API key | `dev-admin-key` (`X-Admin-Api-Key`) |
 
-> Пользователь должен быть **привязан к клиенту** (membership), иначе authorize/login вернёт `access_denied`. Dev seed привязывает `user` и `admin` к `test-client` и `confidential-demo`.
+> По умолчанию пользователь должен быть **привязан к клиенту** (membership), иначе authorize/login вернёт `access_denied`. У клиента можно выключить `require_membership` — тогда войдёт любой enabled-пользователь. Dev seed привязывает `user` и `admin` к `test-client` и `confidential-demo`.
 
 ---
 
@@ -62,6 +62,8 @@ JSON Admin API (`/admin/clients`, `/admin/users`) — заголовок `X-Admi
 |------|-----|-----|--------|
 | [SPA (PKCE)](examples/spa-demo) | [http://localhost:5173](http://localhost:5173) | Public client | нет в браузере |
 | [Confidential BFF](examples/confidential-demo) | [http://localhost:5174](http://localhost:5174) | Confidential client | только на Node-бэкенде |
+
+SPA-демо (`test-client`) — `require_membership=false`, на дашборде видны клеймы **access token**. Confidential-демо по-прежнему требует membership.
 
 ```bash
 ./scripts/macos/spa-demo.sh              # public + PKCE

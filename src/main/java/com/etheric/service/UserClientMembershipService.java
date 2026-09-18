@@ -33,6 +33,25 @@ public class UserClientMembershipService {
         }
     }
 
+    /**
+     * Whether the user may complete OAuth for this client.
+     * Honours {@code require_membership}: when false, any authenticated user is allowed.
+     */
+    public Uni<Boolean> canAuthenticate(String userId, String clientId) {
+        if (userId == null || userId.isBlank() || clientId == null || clientId.isBlank()) {
+            return Uni.createFrom().item(false);
+        }
+        return clientRepository.findByClientId(clientId).flatMap(opt -> {
+            if (opt.isEmpty()) {
+                return Uni.createFrom().item(false);
+            }
+            if (!opt.get().requireMembership) {
+                return Uni.createFrom().item(true);
+            }
+            return isMember(userId, clientId);
+        });
+    }
+
     public Uni<List<MembershipAssignmentView>> listClientsForUser(UUID userId) {
         return membershipRepository.findClientIdsForUser(userId)
                 .flatMap(assignedIds -> {

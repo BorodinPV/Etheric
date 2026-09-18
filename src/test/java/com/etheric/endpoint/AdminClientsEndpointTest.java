@@ -79,6 +79,7 @@ class AdminClientsEndpointTest {
             .body("scopes", hasItems("openid", "profile", "email"))
             .body("grant_types", hasItems("authorization_code", "refresh_token"))
             .body("enabled", equalTo(true))
+            .body("require_membership", equalTo(true))
             .body("client_description", equalTo("Demo client"));
     }
 
@@ -156,7 +157,9 @@ class AdminClientsEndpointTest {
             .statusCode(200)
             .body("client_id", equalTo("test-client"))
             .body("client_name", equalTo("Etheric Dev Application"))
-            .body("client_secret", nullValue());
+            .body("client_secret", nullValue())
+            .body("require_membership", equalTo(false))
+            .body("token_endpoint_auth_method", equalTo("none"));
     }
 
     @Test
@@ -195,6 +198,7 @@ class AdminClientsEndpointTest {
                 "scopes", List.of("openid", "profile"),
                 "grant_types", List.of("authorization_code"),
                 "enabled", false,
+                "require_membership", false,
                 "client_description", "Updated description"
             ))
         .when()
@@ -206,6 +210,7 @@ class AdminClientsEndpointTest {
             .body("scopes", equalTo(List.of("openid", "profile")))
             .body("grant_types", equalTo(List.of("authorization_code")))
             .body("enabled", equalTo(false))
+            .body("require_membership", equalTo(false))
             .body("client_description", equalTo("Updated description"));
     }
 

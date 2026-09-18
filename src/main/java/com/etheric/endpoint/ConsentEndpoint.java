@@ -109,7 +109,7 @@ public class ConsentEndpoint {
                 return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST)
                         .entity("Client not found").build());
             }
-            return membershipService.isMember(session.getUserId(), requestState.getClientId())
+            return membershipService.canAuthenticate(session.getUserId(), requestState.getClientId())
                     .flatMap(member -> {
                         if (!Boolean.TRUE.equals(member)) {
                             return accessDenied(requestState, state);
@@ -135,7 +135,7 @@ public class ConsentEndpoint {
     }
 
     private Uni<Response> handleApprove(SessionData session, AuthorizationRequestState requestState, String state) {
-        return membershipService.isMember(session.getUserId(), requestState.getClientId()).flatMap(member -> {
+        return membershipService.canAuthenticate(session.getUserId(), requestState.getClientId()).flatMap(member -> {
             if (!Boolean.TRUE.equals(member)) {
                 return accessDenied(requestState, state);
             }

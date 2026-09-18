@@ -41,6 +41,7 @@ Open [http://localhost:5174](http://localhost:5174).
 | Post-logout redirect | `http://localhost:5174/` |
 | Scopes | `openid`, `profile`, `email` |
 | Grant types | `authorization_code`, `refresh_token` |
+| `require_membership` | `true` — user must be assigned (dev seed binds `user` and `admin`) |
 
 Override with env: `ETHERIC_URL`, `CLIENT_ID`, `CLIENT_SECRET`, `APP_ORIGIN`, `PORT`.
 
@@ -55,7 +56,7 @@ Override with env: `ETHERIC_URL`, `CLIENT_ID`, `CLIENT_SECRET`, `APP_ORIGIN`, `P
 
 1. **Login** — browser goes to this BFF `/login`. The BFF stores `state`/`nonce` in an HttpOnly session and redirects to Etheric `/authorize` **without PKCE**.
 2. **Callback** — Etheric returns to BFF `/callback`. The BFF exchanges `code` + `client_secret` at `POST /token` (Basic or form). Tokens stay in the server session.
-3. **Dashboard** — UI calls same-origin `/api/session`. Claims are decoded on the BFF; raw tokens are not sent to the page.
+3. **Dashboard** — UI calls same-origin `/api/session`. The BFF decodes **access token** profile claims (`preferred_username`, `email`, `groups`) plus `id_token`; raw tokens are not sent to the page.
 4. **Introspect / refresh / logout** — BFF uses the secret for RFC 7662 / RFC 7009 and refresh-token grant, then (on logout) redirects to Etheric `/logout`.
 
 Why a BFF: a secret in JavaScript can be copied from DevTools. Confidential clients authenticate the *application*, so the secret belongs on a server you control.

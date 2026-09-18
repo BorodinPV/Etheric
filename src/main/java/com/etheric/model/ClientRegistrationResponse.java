@@ -54,4 +54,7 @@ public class ClientRegistrationResponse {
 
     @JsonProperty("token_endpoint_auth_method")
     private String tokenEndpointAuthMethod;
+
+    @JsonProperty("require_membership")
+    private boolean requireMembership;
 }
